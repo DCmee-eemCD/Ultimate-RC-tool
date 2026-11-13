@@ -73,5 +73,5 @@ module.exports=async({context,page,sw,url,root,check})=>{
   await page.waitForFunction(()=>GM_getValue('rc_ocr_status').workers===0);
   check('Idle release and stopping during active OCR finish safely');
   check('Real offscreen OCR: 1/2/4 workers, deduplication, cache, pool switching, auto sizing and release',timings);
-  await fs.writeFile(path.join(root,'V6-TEST-RESULTS.json'),JSON.stringify({timings,limitations:'Synthetic English fixture; not a live EduNext latency or accuracy benchmark.'},null,2));
+  await fs.writeFile(path.join(root,'tests/results/V6-TEST-RESULTS.json'),JSON.stringify({timings,limitations:'Synthetic English fixture; not a live EduNext latency or accuracy benchmark.'},null,2));
 };

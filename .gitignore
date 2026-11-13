@@ -8,6 +8,7 @@ node_modules/
 
 # Local release archives (publish reviewed builds separately)
 /*.zip
+/releases/
 
 # Secrets and local configuration
 .env

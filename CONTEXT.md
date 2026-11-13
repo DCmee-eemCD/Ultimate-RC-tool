@@ -12,28 +12,26 @@ Owner: Kriley. Communication: concise, friendly Vietnamese, ông/tôi. English i
 fine for developer documentation. Do the requested work without repeated approvals.
 
 Working directory: `D:\Ultimate RC Tool` on Windows/PowerShell. Node is installed.
-`git init` was run on 2026-11-13 and origin points to
-`https://github.com/DCmee-eemCD/Ultimate-RC-tool.git`. No commit or push has been
-made: this environment could not resolve github.com, so remote branches/history
-and reconciliation remain unverified. Do not create an independent root commit;
-fetch and inspect the existing history before committing. The internal file
-reference identified during publication review was removed with owner approval.
-.gitignore now excludes local profiles/staging, release ZIPs, metadata, caches
-and common credential files. A pattern scan of 71 publishable candidates found
-no recognized API-key/token/private-key patterns; this is not a complete security
-audit. Existing remote history and binary assets still need appropriate review.
+Git is initialized on `main`, with origin
+`https://github.com/DCmee-eemCD/Ultimate-RC-tool.git`. Existing history includes
+merge commit `e5a2812` preserving GitHub history. On 2026-11-13, fetch was blocked
+by read-only access to `.git`; current remote state is not verified.
+.gitignore excludes profiles/staging, release archives, metadata and credentials.
 A previous environment switched to Linux and lost scratch files; do not assume
 all historical paths still exist.
 
 ## Current state
 
-- Local manifest/build version: **6.1.7**.
+- Local manifest/build version: **2.0.0**; numbering reset at owner request.
+- Build reads the manifest version for UI and OCR runtime labels.
+- Old ZIPs moved to `releases/archive/`; JSON reports moved to `tests/results/`.
+- Git commit/push pending: `.git` is read-only in this session.
 - Historical handoff recorded the shared ZIP as **6.1.6**.
   This review did not re-query its remote state. Re-query before replacing;
   do not assume the version remains current.
 - 6.1.7 changes Play/Pause from font glyphs to SVG icons, with a centered 38px
   button and accessible labels. Build and mocked music tests passed. A local
-  `Ultimate-RC-Chrome-6.1.7.zip` exists; its Library upload/final delivery was not
+  `releases/archive/Ultimate-RC-Chrome-6.1.7.zip` exists; its Library upload/final delivery was not
   completed before this documentation request. Do not call it a delivered release.
 - These handoff files were added after that ZIP; repack if they should ship inside it.
 
@@ -44,7 +42,7 @@ playback; stopping removes the mini icon. Build/syntax and mocked music lifecycl
 checks passed, including minimize/restore, keyboard activation, and stop while
 minimized. Live service playback has not been verified.
 
-Further local changes now present in source and generated app (still 6.1.7):
+Further UI changes included in the 2.0.0 source and generated app:
 dashboard color and theme-aware controls, dark/light image palettes, updated
 color swatches, removal of decorative button emoji, gray unplayed music track,
 and SVG left-navigation replacements. No new ZIP was built during this review.
@@ -56,7 +54,7 @@ The gray music track is an unplayed seek track, not measured buffered progress.
 | --- | --- |
 | source/Ultimate-RC-tools-5.14.txt | Historical userscript, immutable build input |
 | build.mjs | Extracts/transforms original page and OCR code |
-| build-v6.mjs | Offscreen, theme transfer, OCR fixes, music, toolbar and version transforms |
+| scripts/build-transforms.mjs | Offscreen, theme transfer, OCR fixes, music, toolbar and version transforms |
 | source/theme-transfer.js | Theme import/export UI logic |
 | source/dashboard-theme.js | Dashboard CSS variables and dark/light image-palette normalization |
 | source/nav-icons.js | React-safe left-navigation SVG replacements and alignment |
@@ -83,7 +81,7 @@ Run `node build.mjs` from the project root. It regenerates app.js, ocr-core.js a
 ocr-engine.js. Other extension files are maintained directly. The build includes
 string/regex transforms; some have guards, others do not. Inspect generated output.
 There is no root package.json/npm test command. `build.mjs` imports and invokes
-`upgrade()` from build-v6.mjs; do not run build-v6.mjs as a standalone build.
+`upgrade()` from scripts/build-transforms.mjs; do not run scripts/build-transforms.mjs as a standalone build.
 
 ## Runtime architecture
 
@@ -204,27 +202,29 @@ use separate browser profiles; never automate the user's real profile by default
   1/2 workers, three answer options as text, no cropped segments, one HTML qbox.
 - music.cjs: mocked providers/SDKs; verifies URLs, visibility, play/pause, seek,
   saved link and no startup playback. It does NOT prove live streaming works.
-- fidelity.cjs / FIDELITY-TEST-RESULTS.json: historical 6.0.1 expectations for crops;
+- fidelity.cjs / tests/results/FIDELITY-TEST-RESULTS.json: historical 6.0.1 expectations for crops;
   stale since 6.1.2. Do not restore rejected behavior to make this test pass.
 - rust-parity.cjs and video-csp.cjs: specialized checks; read their prerequisites.
-- Existing JSON reports are historical artifacts, not proof for every new version.
+- Existing JSON reports in `tests/results/` are historical artifacts, not proof for every new version.
 
 No authenticated live EduNext session was verified in this handoff.
 
 ## Release and next work
 
-Update both manifest version and build-v6.mjs visible version. Build, check relevant
+Update `extension/manifest.json` version; build propagates it to visible UI and OCR. Build, check relevant
 behavior, stage extension + source + build scripts + Rust source + needed assets/docs.
 Exclude .transfer, browser profiles, extension/_metadata, credentials and private
 screenshots. ZIP root must contain extension/manifest.json at that relative path.
 Install via chrome://extensions -> Developer mode -> Load unpacked -> extension.
 For updates: Reload extension, then reload EduNext to drop stale page code/results.
 
-Next: finish 6.1.7 handoff if requested; validate SVG appearance in actual player.
+Next: commit/push 2.0.0 when Git write access is available; validate SVG appearance in actual player.
 Also validate navigation alignment on live EduNext and dark/light image palettes,
 dashboard controls and old/new theme roundtrips in-browser. Current checked-in
 tests do not provide dedicated coverage for the latest palette/navigation UI.
-This documentation review inspected sources and generated markers only; it did
-not rerun browser/OCR tests, rebuild runtime files or update historical JSON reports.
+The 2.0.0 cleanup rebuilt generated files and passed syntax checks and the mocked
+music lifecycle test plus real OCR question-text checks with 1/2 workers.
+The question-text report was refreshed; other saved reports remain historical.
+No new ZIP was produced; load the current `extension/` folder.
 Future backlog ideas (NOT authorized work): draggable controls, playlists,
 OCR editing/comparison, theme schedules. Keep unrelated work out of small fixes.

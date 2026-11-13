@@ -4,7 +4,7 @@
     RC.pixelBackend = kernels ? "rust" : "javascript";
     'use strict';
 
-    const HUB_VER = '5.15-rust';   // tab hub chạy sẵn KHÔNG tự nạp lại script → khác phiên bản thì phải đóng rồi mở hub mới
+    const HUB_VER = '2.0.0';   // tab hub chạy sẵn KHÔNG tự nạp lại script → khác phiên bản thì phải đóng rồi mở hub mới
     const log = (...a) => console.log('%c[RC]', 'color:#f59e0b', ...a);
     const whenBody = fn => (document.body ? fn() : document.addEventListener('DOMContentLoaded', fn, { once: true }));
 

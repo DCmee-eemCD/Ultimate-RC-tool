@@ -54,6 +54,6 @@ assert.equal(sandbox.read({__reactFiber$x:{memoizedProps:{content:'https://test'
  },{renderCode,result,sample});
  assert.ok(rendered.icons>=4);assert.match(rendered.copiedOcr,/Kỷ lục/);assert.equal(rendered.copiedSource,sample);assert.equal(rendered.remainingIcons,0);
  const summary={sourceTests:'passed',rendered,one:result.one.text,two:result.two.text,math:result.math.text,counts:Object.fromEntries(Object.entries(result).map(([k,v])=>[k,v.segments.filter(s=>s.preserved).length]))};
- fs.writeFileSync(path.join(root,'FIDELITY-TEST-RESULTS.json'),JSON.stringify(summary,null,2));console.log(JSON.stringify(summary,null,2));
+ fs.writeFileSync(path.join(root,'tests/results/FIDELITY-TEST-RESULTS.json'),JSON.stringify(summary,null,2));console.log(JSON.stringify(summary,null,2));
  }finally{await context.close();}
 })().catch(e=>{console.error(e);process.exitCode=1;});

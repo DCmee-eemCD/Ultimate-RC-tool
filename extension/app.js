@@ -1,6 +1,6 @@
 (async function () {
     'use strict';
-    const HUB_VER = '5.15-rust';
+    const HUB_VER = '2.0.0';
     const log = (...a) => console.log('%c[RC]', 'color:#f59e0b', ...a);
     const whenBody = fn => (document.body ? fn() : document.addEventListener('DOMContentLoaded', fn, { once: true }));
     // =====================================================================
@@ -988,7 +988,7 @@ kbd{background:var(--chip);border:1px solid var(--line);border-radius:5px;paddin
         root.innerHTML = `
 <div class="w">
   <div class="panel" id="panel">
-    <div class="hd"><div><b>🎨 Ultimate RC</b><small>v6.1.7</small></div><button class="x" id="rk-close" title="Đóng (Esc)">✕</button></div>
+    <div class="hd"><div><b>🎨 Ultimate RC</b><small>v2.0.0</small></div><button class="x" id="rk-close" title="Đóng (Esc)">✕</button></div>
     <div class="tabs"><button class="tab" data-tab="theme">Giao diện</button><button class="tab" data-tab="feat">Tính năng</button><button class="tab" data-tab="ocr">OCR</button><button class="tab" data-tab="music">Nhạc</button></div>
     <div class="body"><div class="sec" data-sec="music">
     <h4>YouTube / Spotify</h4><input id="rc-music-url" type="url" placeholder="Dán link bài hát / playlist" style="box-sizing:border-box;width:100%;padding:9px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--fg)">
@@ -1407,5 +1407,5 @@ kbd{background:var(--chip);border:1px solid var(--line);border-radius:5px;paddin
 
     whenBody(initUI);
 
-    log('Ultimate RC tools v6.1.7 sẵn sàng');
+    log('Ultimate RC tools v2.0.0 sẵn sàng');
 })();

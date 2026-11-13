@@ -86,6 +86,6 @@ const root=path.resolve(__dirname,'..');
     // A cached poster correctly skips auto-theme after reload; explicitly refresh it.
     await page.locator('#rc-kit #rk-pal').click();
     await page.waitForFunction(()=>RC.paletteBackend==='rust');pass('Video background color matching uses Rust palette');
-    await fs.writeFile(path.join(root,'VIDEO-TEST-RESULTS.json'),JSON.stringify({version:manifest.version,browser:context.browser()?.version(),results},null,2));
+    await fs.writeFile(path.join(root,'tests/results/VIDEO-TEST-RESULTS.json'),JSON.stringify({version:manifest.version,browser:context.browser()?.version(),results},null,2));
   }finally{await context.close();await new Promise(r=>server.close(r));}
 })().catch(e=>{console.error(e);process.exitCode=1;});

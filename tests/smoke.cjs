@@ -136,6 +136,6 @@ const root=path.resolve(__dirname,'..');
     check('Single-image OCR fallback returns recognized text');
     await require('./v6-features.cjs')({context,page,sw,url,root,check});
     assert.deepEqual(errors,[]);check('No page JavaScript errors');
-    await fs.writeFile(path.join(root,'TEST-RESULTS.json'),JSON.stringify({browser:context.browser()?.version(),results},null,2));
+    await fs.writeFile(path.join(root,'tests/results/TEST-RESULTS.json'),JSON.stringify({browser:context.browser()?.version(),results},null,2));
   }finally{await context.close();}
 })().catch(e=>{console.error(e);process.exitCode=1;});

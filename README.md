@@ -1,9 +1,23 @@
 # Ultimate RC tools — Chrome extension
 
-Current local version: **6.1.7**. Documentation checked against the workspace on
-2026-11-13. The working folder contains newer UI changes than the existing 6.1.7
-ZIP; the version number alone does not identify those changes. See CONTEXT.md for
-developer handoff and RULES.md before editing.
+Current version: **2.0.0** (version numbering reset at the owner's request).
+Includes the latest dashboard, image-theme, navigation and music UI changes.
+See CONTEXT.md for developer handoff and RULES.md before editing.
+
+## Project layout
+
+| Folder | Contents |
+| --- | --- |
+| `extension/` | Ready-to-load Chrome extension |
+| `source/` | Original userscript and maintained feature modules |
+| `scripts/` | Build transforms used by `node build.mjs` |
+| `rust-kernels/` | Rust/WASM source and build script |
+| `images/` | Original logo assets |
+| `tests/` | Test scripts and fixtures |
+| `tests/results/` | Saved test reports (historical unless stated otherwise) |
+| `releases/archive/` | Old local ZIPs, excluded from Git |
+
+The manifest is the version source; rebuild after changing its version.
 
 ## Current features and recent changes
 
@@ -77,7 +91,7 @@ Reload the extension at chrome://extensions and reload EduNext to clear old OCR.
 - Scrollbar: 6 px, rounded, transparent track, no arrow buttons, light/dark colors.
   Range sliders now use matching tracks and progress fills.
 
-`V6-TEST-RESULTS.json` records local synthetic-fixture timings for 1/2/4 workers,
+`tests/results/V6-TEST-RESULTS.json` records local synthetic-fixture timings for 1/2/4 workers,
 warm workers and repeated images. These are not live EduNext performance claims.
 Multithreading can cost more startup time and RAM; it is not always faster.
 
@@ -104,7 +118,7 @@ limit is checked before allocation; larger OCR pixel buffers use the existing
 JavaScript path. No SharedArrayBuffer/COOP/COEP is required.
 
 Run `node tests/rust-parity.cjs` to compare pixels, palettes, and bounding boxes
-against functions extracted from the original userscript. `RUST-TEST-RESULTS.json`
+against functions extracted from the original userscript. `tests/results/RUST-TEST-RESULTS.json`
 includes local kernel timings including pixel copies; these are not end-to-end
 OCR speed measurements or a promise of a speedup on other machines.
 
@@ -133,7 +147,7 @@ workers, LaTeX source recovery, question boxes and image/text toggles are retain
 
 ## Install
 
-1. Extract this ZIP into a permanent folder.
+1. Clone/download this repository (or extract a release ZIP) into a permanent folder.
 2. Disable **Ultimate RC tools** in Tampermonkey to prevent duplicate handlers/UI.
 3. Open `chrome://extensions` and enable **Developer mode**.
 4. Choose **Load unpacked**, then select the **extension** folder (the folder
@@ -177,7 +191,7 @@ It does not request browser history, passwords, cookies or debugger access.
 `source/Ultimate-RC-tools-5.14.txt` is the unchanged input. `node build.mjs`
 regenerates `extension/app.js`, `extension/ocr-core.js` and legacy `extension/ocr-engine.js`, with explicit
 replacement guards that fail if the source structure changes. Other extension
-files are maintained directly. `build-v6.mjs` applies the current transforms and
+files are maintained directly. `scripts/build-transforms.mjs` applies the current transforms and
 injects the modules in `source/`, including dashboard themes, navigation icons,
 theme transfer and music. Edit those sources, not only generated files. There is
 no root package.json or npm test script; run the Node commands directly.

@@ -61,5 +61,5 @@ const {performance}=require('node:perf_hooks');
   function measure(fn){const values=[];for(let i=0;i<8;i++){const data=sample.slice(),t=performance.now();fn(data);values.push(performance.now()-t);}values.sort((a,b)=>a-b);return values[4];}
   const timings={pixels:1400*900,rustWithCopiesMs:measure(p=>kernels.preprocess(p)),originalJsMs:measure(jsPreprocess)};
   console.log('Preprocess timings (Node, not end-to-end OCR):',timings);
-  await fs.writeFile('RUST-TEST-RESULTS.json',JSON.stringify({version:'5.15.0',wasmBytes:bytes.length,reports,timings},null,2));
+  await fs.writeFile('tests/results/RUST-TEST-RESULTS.json',JSON.stringify({version:'5.15.0',wasmBytes:bytes.length,reports,timings},null,2));
 })().catch(e=>{console.error(e);process.exitCode=1;});

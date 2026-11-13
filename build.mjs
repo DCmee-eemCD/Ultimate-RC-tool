@@ -1,5 +1,6 @@
 import fs from 'node:fs/promises';
-import {upgrade} from './build-v6.mjs';
+import {upgrade} from './scripts/build-transforms.mjs';
+const {version} = JSON.parse(await fs.readFile('extension/manifest.json', 'utf8'));
 const source = await fs.readFile(new URL('./source/Ultimate-RC-tools-5.14.txt', import.meta.url), 'utf8');
 await fs.mkdir('extension', {recursive:true});
 function replaceOnce(s, a, b) {
@@ -68,7 +69,7 @@ engine=engine.slice(0,cropStart)+`            let x0 = ch.x0 ?? W, x1 = ch.x1 ??
             if (ch.x0 === undefined) {
 ${cropJS}            }
 `+engine.slice(cropEnd);
-engine=engine.replaceAll("const HUB_VER = '5.13'", "const HUB_VER = '5.15-rust'");
+engine=engine.replaceAll("const HUB_VER = '5.13'", `const HUB_VER = '${version}'`);
 await fs.writeFile('extension/ocr-engine.js', engine);
 // Keep all original page features, styles and markup; the OCR engine lives in its own extension tab.
 app = '(async function () {\n    \'use strict\';\n' +
@@ -101,6 +102,6 @@ app = replaceOnce(app, '    // =================================================
 app = replaceOnce(app, 'if (cfg[key] !== false) e.stopImmediatePropagation();', "if (cfg[key] !== false && !e.composedPath().some(n => n && n.id === 'rc-kit')) e.stopImmediatePropagation();");
 app = replaceOnce(app, '<small>v5.14</small>', '<small>v5.15.0</small>');
 app = replaceOnce(app, "log('Ultimate RC tools v5.14 sẵn sàng');", "log('Ultimate RC tools v5.15.0 sẵn sàng');");
-app = await upgrade(app, engine);
+app = await upgrade(app, engine, version);
 await fs.writeFile('extension/app.js', app);
 console.log('Built page features and OCR engine from the unchanged 5.14 source.');
