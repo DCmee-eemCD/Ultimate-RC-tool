@@ -1,0 +1,189 @@
+{
+  "browser": "157.0.8103.50",
+  "results": [
+    {
+      "name": "Original three-tab GUI loads with strict page CSP",
+      "status": "passed"
+    },
+    {
+      "name": "Theme applied under CSP and persisted across reload",
+      "status": "passed"
+    },
+    {
+      "name": "Enter sends; Shift+Enter does not; early paste guard works",
+      "status": "passed"
+    },
+    {
+      "name": "Rust WASM is used for OCR pixels and background color palette",
+      "status": "passed"
+    },
+    {
+      "name": "Real bundled WASM OCR, two workers, React LaTeX recovery",
+      "details": "2 luồng · vie+eng · rust",
+      "status": "passed"
+    },
+    {
+      "name": "Cross-origin media bridge preserves binary image data",
+      "status": "passed"
+    },
+    {
+      "name": "Original-image toggle and actual clipboard contents",
+      "status": "passed"
+    },
+    {
+      "name": "Offscreen workers released without opening tabs",
+      "status": "passed"
+    },
+    {
+      "name": "Single-image OCR fallback returns recognized text",
+      "status": "passed"
+    },
+    {
+      "name": "Theme-aware thin scrollbar and range controls",
+      "status": "passed"
+    },
+    {
+      "name": "Theme JSON export/import; invalid input rejected without changing settings",
+      "status": "passed"
+    },
+    {
+      "name": "Uploaded video survives portable theme round trip",
+      "status": "passed"
+    },
+    {
+      "name": "Idle release and stopping during active OCR finish safely",
+      "status": "passed"
+    },
+    {
+      "name": "Real offscreen OCR: 1/2/4 workers, deduplication, cache, pool switching, auto sizing and release",
+      "details": [
+        {
+          "threads": 1,
+          "ocr": 1433,
+          "post": 7,
+          "strips": 1,
+          "stripMs": [],
+          "t": {
+            "lay": 2,
+            "bang": 4,
+            "vung": 0,
+            "hinh": 0,
+            "hinhs": 0
+          },
+          "load": 10,
+          "pool": 205,
+          "total": 1683,
+          "workers": 1,
+          "backend": "rust",
+          "cached": false,
+          "queue": 0
+        },
+        {
+          "threads": 2,
+          "ocr": 1251,
+          "post": 7,
+          "strips": 3,
+          "stripMs": [
+            1239,
+            1183,
+            1236
+          ],
+          "t": {
+            "lay": 3,
+            "bang": 4,
+            "vung": 0,
+            "hinh": 0,
+            "hinhs": 0
+          },
+          "load": 6,
+          "pool": 220,
+          "total": 1510,
+          "workers": 2,
+          "backend": "rust",
+          "cached": false,
+          "queue": 0
+        },
+        {
+          "threads": 4,
+          "ocr": 1241,
+          "post": 6,
+          "strips": 3,
+          "stripMs": [
+            1236,
+            1198,
+            1160
+          ],
+          "t": {
+            "lay": 2,
+            "bang": 4,
+            "vung": 0,
+            "hinh": 0,
+            "hinhs": 0
+          },
+          "load": 7,
+          "pool": 311,
+          "total": 1601,
+          "workers": 4,
+          "backend": "rust",
+          "cached": false,
+          "queue": 0
+        },
+        {
+          "mode": "content-cache",
+          "ocr": 0,
+          "post": 0,
+          "strips": 3,
+          "stripMs": [
+            1236,
+            1198,
+            1160
+          ],
+          "t": {
+            "lay": 2,
+            "bang": 4,
+            "vung": 0,
+            "hinh": 0,
+            "hinhs": 0
+          },
+          "load": 5,
+          "pool": 0,
+          "total": 5,
+          "workers": 4,
+          "backend": "rust",
+          "cached": true,
+          "queue": 0
+        },
+        {
+          "mode": "warm-pool",
+          "ocr": 1191,
+          "post": 9,
+          "strips": 3,
+          "stripMs": [
+            1186,
+            1115,
+            1055
+          ],
+          "t": {
+            "lay": 5,
+            "bang": 4,
+            "vung": 0,
+            "hinh": 0,
+            "hinhs": 0
+          },
+          "load": 2,
+          "pool": 0,
+          "total": 1230,
+          "workers": 4,
+          "backend": "rust",
+          "cached": false,
+          "queue": 1
+        }
+      ],
+      "status": "passed"
+    },
+    {
+      "name": "No page JavaScript errors",
+      "status": "passed"
+    }
+  ]
+}

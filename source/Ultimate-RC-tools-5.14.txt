@@ -1,0 +1,1497 @@
+// ==UserScript==
+// @name         Ultimate RC tools
+// @namespace    http://tampermonkey.net/
+// @version      5.14
+// @description  Bật lại copy/paste, quét ảnh câu trả lời → chữ ngay trong bong bóng bot, theme toàn widget + trang, Enter gửi (Text + Math) / Shift+Enter xuống dòng
+// @match        https://fsc-edunext.fpt.edu.vn/*
+// @match        https://cdn-lab.fpt.edu.vn/*
+// @require      https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js
+// @grant        GM_getValue
+// @grant        GM_setValue
+// @grant        GM_deleteValue
+// @grant        GM_setClipboard
+// @grant        GM_openInTab
+// @grant        GM_xmlhttpRequest
+// @connect      *
+// @grant        GM_addValueChangeListener
+// @grant        GM_removeValueChangeListener
+// @grant        unsafeWindow
+// @run-at       document-start
+// ==/UserScript==
+
+(function () {
+    'use strict';
+
+    const HUB_VER = '5.13';   // tab hub chạy sẵn KHÔNG tự nạp lại script → khác phiên bản thì phải đóng rồi mở hub mới
+    const log = (...a) => console.log('%c[RC]', 'color:#f59e0b', ...a);
+    const whenBody = fn => (document.body ? fn() : document.addEventListener('DOMContentLoaded', fn, { once: true }));
+
+    // =====================================================================
+    // 0. CHẾ ĐỘ "TAB ẢNH" (chạy trên cdn-lab.fpt.edu.vn)
+    //    Trang EduNext có CSP chặn WebAssembly + worker → Tesseract không chạy được ở đó.
+    //    Tab ảnh của cdn-lab không có CSP → OCR ở đây rồi gửi chữ về qua GM_setValue.
+    //    Chỉ hoạt động khi URL có #rc-ocr=<id> (do script ở trang chính mở), xem ảnh bình thường thì không đụng gì.
+    // =====================================================================
+    // Tách kết quả thành các đoạn: chữ (đã lọc nhiễu) xen kẽ với HÌNH (cắt từ ảnh gốc: hình vẽ, đồ thị, ảnh chụp...).
+    // Vùng "hình" = các hàng có mực nhưng không nằm trong dòng chữ nào Tesseract đọc chắc chắn.
+    function buildResult(data, orig, scale) {
+        const W = orig.width, H = orig.height, T = [performance.now()];
+        const lines = [];
+        (data.blocks || []).forEach(b => (b.paragraphs || []).forEach((p, pi) => (p.lines || []).forEach(l => {
+            let t = (l.text || '').replace(/\s+$/g, '');
+            // emoji cuối dòng bị đọc thành ký tự rác ("X€#") → cắt token cuối nếu ngắn và ít chữ-số
+            t = t.replace(/\s+(\S{1,4})$/u, (m, k) => ((k.match(/[\p{L}\p{N}]/gu) || []).length / k.length < 0.5 && !/^[.,;:!?)\]"']+$/.test(k) ? '' : m));
+            const n = t.replace(/\s/g, '').length;
+            const al = (t.match(/[\p{L}\p{N}]/gu) || []).length;
+            // Chữ trên hình vẽ (nhãn A, B, O…), icon/emoji bị đọc thành "X€#" → tỉ lệ chữ-số thấp hoặc quá ngắn → không tin
+            const clean = n > 0 && al / n >= 0.6 && al >= 3;
+            // Dòng CÔNG THỨC (vd. "S_q = (n)/(360)·πR²"): Tesseract hay đọc độ tin cậy thấp vì chỉ số trên/dưới → trước đây bị coi là "hình".
+            // Ngắn (1 dòng), có toán tử và ≥3 chữ/số, tin cậy ≥40 → nhận là chữ.
+            const hh = l.bbox.y1 - l.bbox.y0;
+            const mathy = n >= 4 && al >= 3 && l.confidence >= 40 && hh <= 100 && /[=+·×÷\/^²³√π∑∫]/.test(t);
+            const ok = (clean && ((n >= 3 && l.confidence >= 75) || (n >= 6 && l.confidence >= 60))) || mathy;
+            lines.push({ t, ok, weak: n < 5, ck: l.ck, pid: (b.bbox ? b.bbox.y0 : 0) + ':' + (p.bbox ? p.bbox.y0 : pi), y0: l.bbox.y0, y1: l.bbox.y1 });
+        })));
+        // dòng ngắn (<5 ký tự) không dùng để "cắt" hình: chỉ giữ nếu cuối cùng không nằm sát/trong hình nào
+        let good = lines.filter(l => l.ok);
+        const covered = new Uint8Array(H);
+        good.filter(l => !l.weak).forEach(l => { for (let y = Math.max(0, l.y0 - 3); y < Math.min(H, l.y1 + 3); y++) covered[y] = 1; });
+        const px = orig.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, W, H).data;
+        // Tính "có mực" 1 lần duy nhất rồi tra bảng (trước đây mỗi lần duyệt lại tính min/max từng điểm ảnh → chậm, nhất là ở tab nền bị Chrome hạ ưu tiên)
+        T.push(performance.now());   // sau getImageData
+        const inkMap = new Uint8Array(W * H);
+        for (let i = 0, j = 0, n = W * H; j < n; i += 4, j++) {
+            const r = px[i], g = px[i + 1], b = px[i + 2];
+            const mn = r < g ? (r < b ? r : b) : (g < b ? g : b), mx = r > g ? (r > b ? r : b) : (g > b ? g : b);
+            inkMap[j] = (mn < 238 || mx - mn > 20) ? 1 : 0;
+        }
+        const ink = i => inkMap[i >> 2];
+        T.push(performance.now());   // sau bảng mực
+        // bỏ các cột là đường viền dọc (khung chiếm gần hết chiều cao)
+        const colInk = new Uint32Array(W);
+        for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (ink((y * W + x) * 4)) colInk[x]++;
+        const skipCol = x => colInk[x] > H * 0.6;
+        const rowInk = new Uint32Array(H);
+        for (let y = 0; y < H; y++) { if (covered[y]) continue; let n = 0; for (let x = 0; x < W; x++) if (!skipCol(x) && ink((y * W + x) * 4)) n++; rowInk[y] = n; }
+        const regions = []; let cur = null;
+        for (let y = 0; y < H; y++) {
+            if (rowInk[y] > 0) {
+                if (cur && y - cur.y1 <= 10) cur.y1 = y; else { cur = { y0: y, y1: y, n: 0 }; regions.push(cur); }
+                cur.n += rowInk[y];
+            }
+        }
+        T.push(performance.now());   // sau tìm vùng
+        const figs = [];
+        regions.forEach(rg => {
+            if (rg.y1 - rg.y0 + 1 < 36 || rg.n < 250) return;
+            let x0 = W, x1 = -1;
+            for (let y = rg.y0; y <= rg.y1; y++) for (let x = 0; x < W; x++) if (!skipCol(x) && ink((y * W + x) * 4)) { if (x < x0) x0 = x; if (x > x1) x1 = x; }
+            if (x1 - x0 < 24) return;
+            // Loại "hình giả": viền khung / đường kẻ (vd. cạnh dưới + góc bo tròn của khung "Câu hỏi") chỉ gồm đường dài + chút góc.
+            // Bỏ các hàng/cột là đường thẳng dài rồi đếm mực còn lại; hình thật (đồ thị, hình vẽ, ảnh chụp) còn rất nhiều mực.
+            {
+                const bw = x1 - x0 + 1, bh = rg.y1 - rg.y0 + 1;
+                const rc = new Uint32Array(bh), cc = new Uint32Array(bw);
+                for (let y = 0; y < bh; y++) for (let x = 0; x < bw; x++) if (ink(((rg.y0 + y) * W + x0 + x) * 4)) { rc[y]++; cc[x]++; }
+                let rem = 0;
+                for (let y = 0; y < bh; y++) { if (rc[y] > bw * 0.5) continue; for (let x = 0; x < bw; x++) if (cc[x] <= bh * 0.6 && ink(((rg.y0 + y) * W + x0 + x) * 4)) rem++; }
+                if (rem < 500) return;
+            }
+            const pad = 6, cx = Math.max(0, x0 - pad), cy = Math.max(0, rg.y0 - pad);
+            const cw = Math.min(W, x1 + pad + 1) - cx, ch = Math.min(H, rg.y1 + pad + 1) - cy;
+            const cv = document.createElement('canvas'); cv.width = cw; cv.height = ch;
+            cv.getContext('2d').drawImage(orig, cx, cy, cw, ch, 0, 0, cw, ch);
+            figs.push({ type: 'img', y0: rg.y0, y1: rg.y1, src: cv.toDataURL('image/webp', 0.9), w: Math.round(cw / scale), h: Math.round(ch / scale) });
+        });
+        good = good.filter(l => !l.weak || !figs.some(f => l.y1 >= f.y0 - 10 && l.y0 <= f.y1 + 10));
+        const items = good.map(l => ({ type: 'line', y0: l.y0, y1: l.y1, t: l.t, pid: l.pid, ck: l.ck })).concat(figs).sort((a, b) => a.y0 - b.y0);
+        const segs = []; let buf = '', lastPid = null, prev = null;
+        const flush = () => { if (buf.trim()) segs.push({ type: 'text', text: buf.trim() }); buf = ''; lastPid = null; prev = null; };
+        items.forEach(it => {
+            if (it.type === 'img') { flush(); segs.push({ type: 'img', src: it.src, w: it.w, h: it.h }); return; }
+            // đoạn mới: cùng cụm quét → theo đoạn của Tesseract; khác cụm (ranh giới vùng chữ) → theo khoảng cách dọc giữa 2 dòng
+            let newPara = it.pid !== lastPid;
+            if (prev && it.ck !== undefined && prev.ck !== undefined && it.ck !== prev.ck) newPara = (it.y0 - prev.y1) > 0.8 * Math.max(8, prev.y1 - prev.y0);
+            buf += (buf ? (newPara ? '\n\n' : '\n') : '') + it.t; lastPid = it.pid; prev = it;
+        });
+        flush();
+        const text = segs.filter(g => g.type === 'text').map(g => g.text).join('\n\n');
+        T.push(performance.now());
+        return { text, segments: segs, t: { lay: Math.round(T[1] - T[0]), bang: Math.round(T[2] - T[1]), vung: Math.round(T[3] - T[2]), hinh: Math.round(T[4] - T[3]), hinhs: figs.length } };
+    }
+    // Quét theo VÙNG CHỮ: tìm các dải chữ (cụm hàng có mực, cách nhau bởi hàng trống), gom thành ~2×k cụm cân nhau,
+    // cắt riêng từng cụm (cả chiều ngang theo phần có mực) rồi để scheduler giao cho worker rảnh. Toạ độ y cộng bù lại khi ghép.
+    async function recognizeStrips(c, x, recognize, k) {
+        const W = c.width, H = c.height;
+        if (k < 2 || H < 200) return recognize(c);
+        const px = x.getImageData(0, 0, W, H).data;
+        const THR = 200;
+        // dải chữ: hàng có mực (đếm cách 2 điểm; >3 để bỏ qua viền dọc của khung)
+        const rows = new Uint8Array(H);
+        for (let y = 0; y < H; y++) { let n = 0; for (let xx = 0, o = y * W * 4; xx < W; xx += 2, o += 8) if (px[o] < THR) n++; rows[y] = n > 3 ? 1 : 0; }
+        const GAP = 7;   // hàng trống tối thiểu để coi là 2 dải khác nhau
+        const bands = [];
+        for (let y = 0, st = -1, last = -1; y <= H; y++) {
+            if (y < H && rows[y]) { if (st < 0) st = y; last = y; }
+            else if (st >= 0 && (y === H || y - last > GAP)) { bands.push({ y0: st, y1: last }); st = -1; }
+        }
+        const real = bands.filter(b => b.y1 - b.y0 >= 6);
+        if (real.length < 2) return recognize(c);
+        // gom các dải liên tiếp thành cụm có tổng chiều cao gần bằng nhau (số cụm ≈ 2×luồng để worker nhanh nhận việc tiếp)
+        const total = real.reduce((a, b) => a + (b.y1 - b.y0 + 1), 0);
+        const nChunks = Math.max(2, Math.min(real.length, k * 2));
+        const target = total / nChunks;
+        const chunks = []; let cur = null, acc = 0;
+        real.forEach(b => {
+            if (!cur) { cur = { y0: b.y0, y1: b.y1 }; acc = 0; } else cur.y1 = b.y1;
+            acc += b.y1 - b.y0 + 1;
+            if (acc >= target && chunks.length < nChunks - 1) { chunks.push(cur); cur = null; }
+        });
+        if (cur) chunks.push(cur);
+        if (chunks.length < 2) return recognize(c);
+        const M = 14;   // lề trắng quanh mỗi vùng — Tesseract đọc tốt hơn khi chữ không sát mép
+        const parts = await Promise.all(chunks.map((ch, ci) => {
+            let x0 = W, x1 = -1;
+            for (let y = ch.y0; y <= ch.y1; y++) for (let xx = 0, o = y * W * 4; xx < W; xx++, o += 4) if (px[o] < THR) { if (xx < x0) x0 = xx; if (xx > x1) x1 = xx; }
+            if (x1 < 0) { x0 = 0; x1 = W - 1; }
+            x0 = Math.max(0, x0 - 4); x1 = Math.min(W - 1, x1 + 4);
+            const cw = x1 - x0 + 1, chh = ch.y1 - ch.y0 + 1;
+            const sc = document.createElement('canvas'); sc.width = cw + 2 * M; sc.height = chh + 2 * M;
+            const sx = sc.getContext('2d'); sx.fillStyle = '#fff'; sx.fillRect(0, 0, sc.width, sc.height);
+            sx.drawImage(c, x0, ch.y0, cw, chh, M, M, cw, chh);
+            const ts = performance.now();
+            return recognize(sc).then(d => ({ d, off: ch.y0 - M, ci, ms: Math.round(performance.now() - ts) }));
+        }));
+        const blocks = [];
+        parts.forEach(({ d, off, ci }) => (d.blocks || []).forEach(b => {
+            const sh = bb => (bb ? Object.assign({}, bb, { y0: bb.y0 + off, y1: bb.y1 + off }) : bb);
+            blocks.push(Object.assign({}, b, { bbox: sh(b.bbox), paragraphs: (b.paragraphs || []).map(p => Object.assign({}, p, { bbox: sh(p.bbox), lines: (p.lines || []).map(l => Object.assign({}, l, { bbox: sh(l.bbox), ck: ci })) })) }));
+        }));
+        return { blocks, text: parts.map(p => p.d.text || '').join('\n'), strips: parts.length, stripMs: parts.map(p => p.ms) };
+    }
+    // Tiền xử lý ảnh + nhận dạng + tách chữ/hình. `recognize(canvas)` trả về data của Tesseract (blocks + text).
+    // Dùng chung cho tab đơn (mỗi ảnh 1 tab) và tab "hub" (1 tab chạy sẵn, nhiều luồng).
+    async function ocrPipeline(im, recognize, par) {
+        const nw = im.naturalWidth || im.width, nh = im.naturalHeight || im.height;
+        const scale = nw < 1400 ? 2 : 1;
+        const orig = document.createElement('canvas');
+        orig.width = nw * scale; orig.height = nh * scale;
+        const ox = orig.getContext('2d', { willReadFrequently: true });
+        ox.fillStyle = '#fff'; ox.fillRect(0, 0, orig.width, orig.height);   // webp trong suốt → nền trắng
+        ox.imageSmoothingQuality = 'high';
+        ox.drawImage(im, 0, 0, orig.width, orig.height);
+        const c = document.createElement('canvas');
+        c.width = orig.width; c.height = orig.height;
+        const x = c.getContext('2d', { willReadFrequently: true });
+        x.drawImage(orig, 0, 0);
+        // Chữ xám rất nhạt (vd. nhãn "Câu hỏi:" trong khung viền, ~#e5e7eb) bị Tesseract coi là nền → mất chữ.
+        // Gamma 8 kéo xám nhạt về tối nhưng vẫn giữ nét mảnh/dấu tiếng Việt
+        // (ngưỡng cứng 240 thì dấu bị mất: "tính"→"tinh", "trả"→"tra").
+        // Đã thử 9 cấu hình trên ảnh thật: gamma 8 + PSM tự động cho lỗi thấp nhất (0.4%, thiếu mỗi emoji).
+        const lut = new Uint8ClampedArray(256);
+        for (let v = 0; v < 256; v++) lut[v] = Math.round(255 * Math.pow(v / 255, 8));
+        const id = x.getImageData(0, 0, c.width, c.height), px = id.data;
+        for (let i = 0; i < px.length; i += 4) {
+            px[i] = px[i + 1] = px[i + 2] = lut[Math.round(0.299 * px[i] + 0.587 * px[i + 1] + 0.114 * px[i + 2])];
+        }
+        x.putImageData(id, 0, 0);
+        const t1 = performance.now();
+        const data = await recognizeStrips(c, x, recognize, par || 1);
+        const t2 = performance.now();
+        const res = buildResult(data, orig, scale);
+        res.ms = { ocr: Math.round(t2 - t1), post: Math.round(performance.now() - t2), strips: data.strips || 1, stripMs: data.stripMs || [] };
+        res.ms.t = res.t;
+        return res;
+    }
+
+    // --- Tab đơn (dự phòng): #rc-ocr=<id>&l=vie+eng — mở 1 tab cho mỗi ảnh ---
+    function runImageTab() {
+        const m = /[#&]rc-ocr=([\w-]+)/.exec(location.hash);
+        if (!m) return;
+        const lm = /[#&]l=([a-z+]+)/.exec(location.hash);
+        const langs = lm ? lm[1] : 'vie+eng';
+        const key = 'rc_ocr_' + m[1];
+        let reported = false;
+        const report = o => {
+            if (reported) return;
+            reported = true;
+            GM_setValue(key, JSON.stringify(o));
+            setTimeout(() => { try { window.close(); } catch (e) {} }, 400);
+        };
+        const waitImg = () => new Promise((res, rej) => {
+            const t0 = Date.now();
+            (function poll() {
+                const im = document.images && document.images[0];
+                if (im && im.complete && im.naturalWidth) return res(im);
+                if (Date.now() - t0 > 30000) return rej(new Error('Ảnh không tải được trong tab OCR'));
+                setTimeout(poll, 150);
+            })();
+        });
+        (async () => {
+            try {
+                const im = await waitImg();
+                const w = await Tesseract.createWorker(langs);
+                const res = await ocrPipeline(im, async c => (await w.recognize(c, {}, { blocks: true, text: true })).data);
+                try { await w.terminate(); } catch (e) {}
+                report(res);
+            } catch (e) {
+                report({ error: String((e && e.message) || e) });
+            }
+        })();
+    }
+
+    // --- Tab HUB: 1 tab nền chạy sẵn, nhận việc qua GM storage, OCR nhiều ảnh song song bằng nhiều worker ---
+    // Tránh việc mỗi ảnh phải mở tab mới + nạp lại WASM/ngôn ngữ. Tự đóng sau một thời gian không có việc.
+    function runHubTab() {
+        const myId = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+        GM_setValue('rc_ocr_hub_ver', HUB_VER);
+        GM_setValue('rc_ocr_hub_owner', myId);   // hub mới thay hub cũ: hub cũ thấy owner khác sẽ tự đóng
+        const setTitle = () => { try { document.title = '🔎 RC OCR — tab nền, cứ để yên'; } catch (e) {} };
+        setTitle(); document.addEventListener('DOMContentLoaded', setTitle, { once: true });
+        const processed = new Set();
+        const startTs = Date.now() - 500;
+        let sched = null, curLangs = '', workers = 0, recogActive = 0, lastJob = Date.now(), idleMs = 10 * 60000, maxW = 0;
+        const hc = Math.max(1, (navigator.hardwareConcurrency || 4));
+        const autoW = Math.max(1, Math.min(8, hc - 1));
+        const closeSelf = () => { try { window.close(); } catch (e) {} };
+        const info = () => GM_setValue('rc_ocr_hub_info', workers + ' luồng · ' + (curLangs || '—'));
+        const beat = () => {
+            if (GM_getValue('rc_ocr_hub_owner') !== myId) { closeSelf(); return; }
+            GM_setValue('rc_ocr_hub', Date.now()); info();
+            if (recogActive === 0 && idleMs > 0 && Date.now() - lastJob > idleMs) closeSelf();
+        };
+        beat(); setInterval(beat, 5000);
+
+        let poolLock = Promise.resolve();
+        const ensurePool = (langs, want) => {
+            const run = async () => {
+                if (sched && curLangs !== langs) {          // đổi ngôn ngữ → dựng lại hồ worker (chờ việc đang chạy xong)
+                    while (recogActive > 0) await new Promise(r => setTimeout(r, 100));
+                    const old = sched; sched = null; workers = 0;
+                    try { await old.terminate(); } catch (e) {}
+                }
+                if (!sched) { sched = Tesseract.createScheduler(); curLangs = langs; workers = 0; }
+                const need = Math.max(1, maxW || autoW);   // luôn dựng đủ hồ worker: 1 ảnh cũng được chia dải để quét song song
+                const adds = [];
+                while (workers < need) {
+                    workers++;
+                    const sc = sched;
+                    adds.push(Tesseract.createWorker(langs).then(w => sc.addWorker(w)).catch(e => { workers = Math.max(0, workers - 1); log('⚠ tạo worker lỗi:', e); }));
+                }
+                info();
+                if (adds.length) await Promise.all(adds);   // chờ đủ worker rồi mới chia dải
+            };
+            poolLock = poolLock.then(run, run);
+            return poolLock;
+        };
+        const loadBitmap = async url => {
+            try {
+                const r = await fetch(url, { credentials: 'omit' });
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                return await createImageBitmap(await r.blob());
+            } catch (e1) {
+                const blob = await new Promise((res, rej) => GM_xmlhttpRequest({
+                    method: 'GET', url, responseType: 'blob',
+                    onload: r => (r.status >= 200 && r.status < 300 ? res(r.response) : rej(new Error('HTTP ' + r.status))),
+                    onerror: () => rej(new Error('Không tải được ảnh trong tab OCR')),
+                }));
+                return await createImageBitmap(blob);
+            }
+        };
+        const handle = async job => {
+            const key = 'rc_ocr_' + job.id, t0 = performance.now();
+            GM_setValue(key, JSON.stringify({ ack: true }));
+            lastJob = Date.now(); GM_setValue('rc_ocr_hub', lastJob);
+            if (job.idle !== undefined) idleMs = job.idle * 60000;
+            if (job.threads) maxW = job.threads;
+            try {
+                const bmp = await loadBitmap(job.url);
+                const tLoad = performance.now() - t0;
+                const langs = job.langs || 'vie+eng';
+                await ensurePool(langs, job.n);
+                const tPool = performance.now() - t0 - tLoad;
+                recogActive++;
+                let res;
+                try {
+                    res = await Promise.race([
+                        ocrPipeline(bmp, async c => (await sched.addJob('recognize', c, {}, { blocks: true, text: true })).data, workers),
+                        new Promise((_, rej) => setTimeout(() => rej(new Error('OCR quá lâu (>120s)')), 120000)),
+                    ]);
+                } finally { recogActive--; lastJob = Date.now(); try { bmp.close(); } catch (e) {} }
+                res.ms = Object.assign({ load: Math.round(tLoad), pool: Math.round(tPool), total: Math.round(performance.now() - t0), workers }, res.ms);
+                GM_setValue(key, JSON.stringify(res));
+            } catch (e) {
+                GM_setValue(key, JSON.stringify({ error: String((e && e.message) || e) }));
+            }
+        };
+        const consume = raw => {
+            let list = [];
+            try { list = typeof raw === 'string' ? JSON.parse(raw) : (raw || []); } catch (e) {}
+            (Array.isArray(list) ? list : []).forEach(j => {
+                if (!j || !j.id || processed.has(j.id) || Date.now() - j.ts > 5 * 60000) return;
+                processed.add(j.id);
+                if (j.cmd === 'quit') { if (j.ts >= startTs) closeSelf(); return; }   // lệnh đóng cũ (gửi cho hub trước) không được làm hub mới tự đóng
+                handle(j);
+            });
+        };
+        GM_addValueChangeListener('rc_ocr_inbox', (n, o, v) => consume(v));
+        consume(GM_getValue('rc_ocr_inbox', '[]'));   // việc được gửi trước khi hub kịp lắng nghe
+    }
+    if (location.hostname === 'cdn-lab.fpt.edu.vn') {
+        if (/[#&]rc-hub\b/.test(location.hash)) runHubTab(); else runImageTab();
+        return;
+    }
+
+    // =====================================================================
+    // 1. CHỐNG ANTI-COPY / ANTI-PASTE
+    //    Phải chạy ở document-start để listener của mình đứng TRƯỚC listener của trang.
+    // =====================================================================
+    // Mỗi nhóm có công tắc riêng trong bảng cài đặt (antiPaste / antiCopy); đọc cfg lúc sự kiện xảy ra nên bật/tắt có hiệu lực ngay.
+    ['copy', 'cut', 'paste', 'contextmenu', 'selectstart', 'dragstart'].forEach(ev => {
+        const key = ev === 'paste' ? 'antiPaste' : 'antiCopy';
+        const stop = e => { if (cfg[key] !== false) e.stopImmediatePropagation(); };
+        window.addEventListener(ev, stop, true);
+        document.addEventListener(ev, stop, true);
+    });
+
+    // =====================================================================
+    // 2. CẤU HÌNH + THEME
+    // =====================================================================
+    const DEFAULTS = {
+        primary: '#2563eb', userBubble: '#dbeafe', botBubble: '#ffffff',
+        chatBg: '#f8fafc',   // viền/khung ngoài của popup chat
+        msgBg: '#ffffff',    // vùng tin nhắn bên trong
+        panelBg: '#ffffff',  // sidebar bài học, header, ô nhập, thẻ khoá học
+        pageBg: '#ffffff',   // nền sau lưng (lớp phủ chat + nền trang web)
+        siteWide: true,      // đổi màu cả trang web ngoài khung chat
+        replaceBubble: true, // thay ảnh câu trả lời của bot bằng chữ ngay trong bong bóng
+        autoCopy: true,      // quét xong tự copy chữ vào clipboard
+        fontSize: 15, fontFamily: '', bgImage: '', bgBlur: 0,
+        enterSend: true, exerciseIntent: 'active', wip: false, uiTab: 'theme', autoTheme: true, autoFor: '', latexSource: true, glass: false, glassBlur: 14, glassAlpha: 55,
+        antiPaste: true, antiCopy: true, qBox: true, ocrVie: true, ocrEng: true, ocrThreads: 0, ocrHub: true, hubIdle: 10,
+    };
+    let cfg = Object.assign({}, DEFAULTS, GM_getValue('chatKit', {}));
+    const save = () => GM_setValue('chatKit', cfg);
+
+    function textColorFor(bg) {
+        const m = /^#([0-9a-f]{6})$/i.exec(bg || '');
+        if (!m) return '';
+        const n = parseInt(m[1], 16);
+        const lum = 0.299 * ((n >> 16) & 255) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255);
+        return lum < 140 ? '#ffffff' : '#1f2937';
+    }
+    const hexToRgb = h => {
+        const m = /^#([0-9a-f]{6})$/i.exec(h || '');
+        if (!m) return null;
+        const n = parseInt(m[1], 16);
+        return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+    };
+    // trộn 2 màu hex (t = 0 → a, t = 1 → b); tự tính bằng JS để không phụ thuộc color-mix()
+    const mix = (a, b, t) => {
+        const A = hexToRgb(a), B = hexToRgb(b);
+        if (!A || !B) return a;
+        return '#' + A.map((v, i) => Math.round(v * (1 - t) + B[i] * t).toString(16).padStart(2, '0')).join('');
+    };
+
+    // ---------- Tự phối màu theme theo ảnh nền ----------
+    // Thu ảnh về 48x48, gom màu theo ô 4 bit/kênh → màu chủ đạo (nhiều nhất) + màu nhấn (nhiều × đậm nhất);
+    // ảnh sáng → theme sáng, ảnh tối → theme tối. Chữ trong bong bóng tự chọn trắng/đen theo textColorFor.
+    function rgb2hsl(r, g, b) {
+        r /= 255; g /= 255; b /= 255;
+        const mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2, d = mx - mn;
+        let h = 0, s = 0;
+        if (d) {
+            s = d / (1 - Math.abs(2 * l - 1));
+            h = mx === r ? ((g - b) / d + (g < b ? 6 : 0)) : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+            h *= 60;
+        }
+        return [h, s, l];
+    }
+    function hsl2hex(h, s, l) {
+        h = ((h % 360) + 360) % 360; s = Math.max(0, Math.min(1, s)); l = Math.max(0, Math.min(1, l));
+        const k = n => (n + h / 30) % 12, a = s * Math.min(l, 1 - l);
+        const f = n => Math.round(255 * (l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)))));
+        return '#' + [f(0), f(8), f(4)].map(v => v.toString(16).padStart(2, '0')).join('');
+    }
+    function paletteFromPixels(px) {
+        const bins = new Map(); let lumSum = 0, n = 0;
+        for (let i = 0; i < px.length; i += 4) {
+            if (px[i + 3] < 128) continue;
+            const r = px[i], g = px[i + 1], b = px[i + 2];
+            lumSum += 0.299 * r + 0.587 * g + 0.114 * b; n++;
+            const key = (r >> 4) << 8 | (g >> 4) << 4 | (b >> 4);
+            const e = bins.get(key) || { c: 0, r: 0, g: 0, b: 0 };
+            e.c++; e.r += r; e.g += g; e.b += b; bins.set(key, e);
+        }
+        if (!n) return null;
+        let dom = null, acc = null, domC = -1, accScore = -1;
+        bins.forEach(e => {
+            const [h, s, l] = rgb2hsl(e.r / e.c, e.g / e.c, e.b / e.c);
+            e.h = h; e.s = s; e.l = l;
+            if (e.c > domC) { domC = e.c; dom = e; }
+            const sc = e.c * s * (1 - Math.abs(2 * l - 1) * 0.8);   // nhiều + đậm màu + không quá sáng/tối
+            if (s > 0.15 && sc > accScore) { accScore = sc; acc = e; }
+        });
+        const light = lumSum / n / 255 > 0.5;
+        const base = dom, ac = acc || dom;
+        const H = base.h, S = Math.min(0.75, Math.max(0.25, base.s));
+        const pH = ac.h, pS = Math.min(0.85, Math.max(0.5, ac.s));
+        if (light) return {
+            primary: hsl2hex(pH, pS, 0.45), userBubble: hsl2hex(pH, pS * 0.8, 0.88), botBubble: hsl2hex(H, S * 0.35, 0.98),
+            msgBg: hsl2hex(H, S * 0.5, 0.94), chatBg: hsl2hex(H, S * 0.7, 0.32), panelBg: hsl2hex(H, S * 0.55, 0.86), pageBg: hsl2hex(H, S * 0.6, 0.78),
+        };
+        return {
+            primary: hsl2hex(pH, pS, 0.62), userBubble: hsl2hex(pH, pS * 0.6, 0.28), botBubble: hsl2hex(H, S * 0.5, 0.19),
+            msgBg: hsl2hex(H, S * 0.5, 0.13), chatBg: hsl2hex(H, S * 0.55, 0.38), panelBg: hsl2hex(H, S * 0.5, 0.16), pageBg: hsl2hex(H, S * 0.55, 0.09),
+        };
+    }
+    let syncInputs = null;
+    function autoThemeFrom(src, force) {
+        const key = String(src.length) + ':' + src.slice(-40);
+        if (!force && cfg.autoFor === key) return;
+        const im = new Image();
+        im.onload = () => {
+            try {
+                const c = document.createElement('canvas'); c.width = c.height = 48;
+                const x = c.getContext('2d', { willReadFrequently: true });
+                x.drawImage(im, 0, 0, 48, 48);
+                const pal = paletteFromPixels(x.getImageData(0, 0, 48, 48).data);
+                if (!pal) return;
+                Object.assign(cfg, pal); cfg.autoFor = key; save(); applyTheme();
+                if (syncInputs) syncInputs();
+                toast('🪄 Đã phối màu theme theo ảnh nền');
+            } catch (e) { log('⚠ phối màu lỗi:', e); }
+        };
+        im.onerror = () => toast('❌ Không đọc được ảnh nền để lấy màu');
+        im.src = src;
+    }
+
+    // CSP của EduNext chặn ảnh/video từ web ngoài, nhưng cho data:/blob: → tải bằng GM_xmlhttpRequest rồi đổi thành data URL (ảnh) / blob URL (video).
+    // Hỗ trợ: ảnh tĩnh, GIF, WebP (động cũng chạy), và video MP4 / WebM. Video: lấy 1 khung hình làm "poster" (dùng cho phối màu, kiểu kính mờ
+    // và làm nền dự phòng); thẻ <video> thật (tắt tiếng, lặp) được gắn thêm ở ensureBgVideo().
+    const bgCache = {}, bgVid = {};
+    const VID_KEY = 'chatKitBgVid', VID_LOCAL = 'rc-vid:local', VID_MAX = 14 * 1024 * 1024;
+    const isVideoRef = u => u === VID_LOCAL || /^data:video\//i.test(u) || /\.(mp4|m4v|webm|ogv|mov)(\?|#|$)/i.test(u);
+    const dataUrlToBlob = d => {
+        const m = /^data:([^;,]*)(;base64)?,(.*)$/s.exec(d); if (!m) throw new Error('data URL không hợp lệ');
+        const bin = m[2] ? atob(m[3]) : decodeURIComponent(m[3]), a = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) a[i] = bin.charCodeAt(i);
+        return new Blob([a], { type: m[1] || 'application/octet-stream' });
+    };
+    function posterOf(blob, done) {
+        const url = URL.createObjectURL(blob), v = document.createElement('video');
+        v.muted = true; v.preload = 'auto'; v.playsInline = true;
+        let fin = false;
+        const out = r => { if (fin) return; fin = true; done(r, url); };
+        v.onloadeddata = () => { try { v.currentTime = Math.min(0.1, (v.duration || 1) / 2); } catch (e) { grab(); } };
+        v.onseeked = grab;
+        function grab() {
+            try {
+                const w = Math.min(960, v.videoWidth || 960), h = Math.round(w * (v.videoHeight || 540) / (v.videoWidth || 960));
+                const c = document.createElement('canvas'); c.width = w; c.height = h;
+                c.getContext('2d').drawImage(v, 0, 0, w, h);
+                out(c.toDataURL('image/jpeg', 0.85));
+            } catch (e) { out(''); }
+        }
+        v.onerror = () => out('');
+        setTimeout(() => out(''), 20000);
+        v.src = url;
+    }
+    function bgSrc(u) {
+        if (!u) return '';
+        if (u === VID_LOCAL) {
+            if (bgCache[u] === undefined) {
+                bgCache[u] = null;
+                try {
+                    const d = GM_getValue(VID_KEY, '');
+                    if (!d) { bgCache[u] = ''; return ''; }
+                    posterOf(dataUrlToBlob(d), (po, url) => { bgCache[u] = po; bgVid[u] = url; applyTheme(); });
+                } catch (e) { bgCache[u] = ''; log('⚠ video nền:', e); }
+            }
+            return bgCache[u] || '';
+        }
+        if (/^data:video\//i.test(u)) return '';
+        if (/^(data|blob):/i.test(u)) return u;
+        if (bgCache[u]) return bgCache[u];
+        if (bgCache[u] === undefined) {
+            bgCache[u] = null;
+            try {
+                GM_xmlhttpRequest({
+                    method: 'GET', url: u, responseType: 'blob',
+                    onload: r => {
+                        const t = (r.response && r.response.type) || '';
+                        const good = r.status >= 200 && r.status < 300 && r.response;
+                        const vid = good && (/^video\//i.test(t) || (!/^image\//i.test(t) && isVideoRef(u)));
+                        const img = good && (/^image\//i.test(t) || (!vid && /\.(gif|webp|png|jpe?g|avif|bmp)(\?|#|$)/i.test(u) && !/^text\//i.test(t)));
+                        if (!vid && !img) { bgCache[u] = ''; toast('❌ Link không phải ảnh/video hợp lệ'); return; }
+                        if (vid) {
+                            if (r.response.size > 60 * 1024 * 1024) { bgCache[u] = ''; toast('❌ Video quá nặng (>60MB)'); return; }
+                            posterOf(r.response, (po, url) => {
+                                if (!po) { bgCache[u] = ''; toast('❌ Không đọc được video (định dạng/codec không hỗ trợ?)'); return; }
+                                bgCache[u] = po; bgVid[u] = url; applyTheme();
+                            });
+                            return;
+                        }
+                        const fr = new FileReader();
+                        fr.onload = () => { bgCache[u] = fr.result; applyTheme(); };
+                        fr.readAsDataURL(r.response);
+                    },
+                    onerror: () => { bgCache[u] = ''; toast('❌ Không tải được ảnh/video nền'); },
+                });
+            } catch (e) { bgCache[u] = ''; }
+        }
+        return '';
+    }
+    // thẻ <video> nền: gắn vào lớp chat (kiểu kính mờ) hoặc popup chat; dưới nội dung, trên ảnh poster
+    let vidEl = null, vidWarned = false;
+    function ensureBgVideo() {
+        const url = cfg.bgImage ? (bgVid[cfg.bgImage] || '') : '';
+        const host = url ? document.querySelector(cfg.glass ? '.chat-overlay' : '.chat-popup') : null;
+        if (!url || !host) { if (vidEl) { try { vidEl.pause(); } catch (e) {} vidEl.remove(); vidEl = null; } return; }
+        if (!vidEl) {
+            vidEl = document.createElement('video');
+            vidEl.className = 'rc-bgvid';
+            vidEl.muted = true; vidEl.setAttribute('muted', ''); vidEl.loop = true; vidEl.autoplay = true; vidEl.playsInline = true;
+            vidEl.disablePictureInPicture = true; vidEl.setAttribute('aria-hidden', 'true'); vidEl.tabIndex = -1;
+            vidEl.onerror = () => {
+                if (!vidWarned) { vidWarned = true; toast('⚠ Trang chặn phát video nền → dùng khung hình đầu làm ảnh nền'); }
+                try { vidEl.remove(); } catch (e) {} vidEl = null;
+            };
+        }
+        if (vidEl.dataset.src !== url) { vidEl.dataset.src = url; vidEl.src = url; }
+        if (vidEl.parentElement !== host) host.insertBefore(vidEl, host.firstChild);
+        if (vidEl.paused && !vidEl.error) { const pr = vidEl.play(); if (pr && pr.catch) pr.catch(() => {}); }
+    }
+    setInterval(() => { try { ensureBgVideo(); } catch (e) {} }, 1500);
+    let styleEl = null;
+    function applyTheme() {
+        const host = document.head || document.documentElement;
+        if (!host) { document.addEventListener('DOMContentLoaded', applyTheme, { once: true }); return; }
+        if (!styleEl || !styleEl.isConnected) {
+            styleEl = document.getElementById('rc-kit-style') || document.createElement('style');
+            styleEl.id = 'rc-kit-style';
+            host.appendChild(styleEl);
+        }
+        const p = cfg.primary, u = cfg.userBubble, b = cfg.botBubble, bg = cfg.chatBg, mb = cfg.msgBg;
+        const uc = textColorFor(u), bc = textColorFor(b);
+        const font = cfg.fontFamily ? cfg.fontFamily.replace(/["';<>{}]/g, '') : '';
+        const imgRaw = bgSrc(cfg.bgImage || '');
+        const img = imgRaw.replace(/['"\\]/g, '');
+        if (imgRaw && cfg.autoTheme) setTimeout(() => autoThemeFrom(imgRaw), 0);
+        const metaColor = textColorFor(mb) === '#ffffff' ? '#cbd5e1' : '#6b7280';
+
+        // luôn cho phép bôi đen chữ trong chat (canvas/nút thì thôi)
+        let css = `
+            .chat-messages, .message-container, .message-container *:not(canvas):not(button),
+            .w-md-editor-text-input { -webkit-user-select:text !important; user-select:text !important; }
+            /* chữ OCR thay cho ảnh câu trả lời */
+            [data-rc-hidden="1"] { display:none !important; }
+            .rc-ocr-text { width:100%; box-sizing:border-box; }
+            .rc-ocr-body { white-space:pre-wrap; word-break:break-word; line-height:1.65; padding:12px 16px; }
+            .rc-seg-text { white-space:pre-wrap; word-break:break-word; }
+            /* khung "Câu hỏi" giống bản gốc của bot: hộp trắng bo góc, nhãn xám nhỏ + nội dung đậm vừa */
+            .rc-qbox { background:#fff !important; color:#1f2937 !important; border:1px solid #d5d8dd; border-radius:16px; padding:16px 20px 17px; margin:14px 0 12px; box-shadow:0 1px 3px rgba(15,23,42,.07); }
+            .rc-qlab { font-size:.8em; color:#6b7280 !important; margin-bottom:12px; line-height:1.2; }
+            .rc-qbody { white-space:pre-wrap; word-break:break-word; font-weight:500; line-height:1.55; }
+            .rc-ocr-fig { display:block; max-width:100%; height:auto; margin:8px 0; border-radius:8px; background:#fff; }
+            .rc-ocr-bar { display:flex; gap:8px; padding:0 12px 10px; }
+            .rc-ocr-bar button { border:1px solid currentColor !important; background:transparent !important; color:inherit !important;
+                opacity:.65; border-radius:8px; padding:2px 10px; font-size:12px; cursor:pointer; }
+            .rc-ocr-bar button:hover { opacity:1; }`;
+
+        if (p) css += `
+            .w-header-new-btn, .ant-btn-primary, .ant-btn-color-primary.ant-btn-variant-solid,
+            .w-send-btn:not([disabled]) { background-color:${p} !important; border-color:${p} !important; }
+            .chat-window a, .chat-popup a { color:${textColorFor(mb) === '#ffffff' ? mix(p, '#ffffff', 0.5) : p} !important; }`;
+
+        // chỉ nhắm đúng .message-container (không dính các thẻ *-stack bọc ngoài)
+        if (u) css += `
+            .message-container.message-user { background:${u} !important; ${uc ? `color:${uc} !important;` : ''} }`;
+        if (b) css += `
+            .message-container.message-assistant { background:${b} !important; ${bc ? `color:${bc} !important;` : ''} }`;
+
+        if (bg) css += `.chat-window, .chat-popup { background-color:${bg} !important; }`;
+
+        if (img) {
+            // .chat-body/.chat-content mặc định nền trắng → phải trong suốt thì mới thấy ảnh nền
+            css += `.chat-body, .chat-content, .chat-window { background:transparent !important; }`;
+            if (cfg.bgBlur > 0) {
+                css += `
+                    .chat-popup::before { content:''; position:absolute; inset:-30px; z-index:0; pointer-events:none;
+                        background:url('${img}') center/cover no-repeat; filter:blur(${cfg.bgBlur}px);
+                        clip-path:inset(30px); }
+                    .chat-popup > .chat-window { position:relative; z-index:1; }`;
+            } else {
+                css += `.chat-popup { background-image:url('${img}') !important; background-size:cover !important; background-position:center !important; }`;
+            }
+        } else if (mb) {
+            css += `.chat-body, .chat-content { background-color:${mb} !important; }`;
+        }
+        if (img && cfg.bgImage && bgVid[cfg.bgImage]) {
+            const vb = Math.max(0, +cfg.bgBlur || 0);
+            css += `
+            .rc-bgvid { position:absolute; inset:${cfg.glass ? -vb * 2 : 0}px; width:calc(100% + ${cfg.glass ? vb * 4 : 0}px); height:calc(100% + ${cfg.glass ? vb * 4 : 0}px);
+                object-fit:cover; pointer-events:none; border-radius:inherit; ${vb ? `filter:blur(${vb}px);` : ''} z-index:${cfg.glass ? -1 : 0}; }
+            .chat-popup > .chat-window { position:relative; z-index:1; }`;
+        }
+        css += `.message-timestamp, .message-meta-row { color:${metaColor} !important; opacity:1 !important; }`;
+
+        // cỡ chữ: KHÔNG đụng vào .katex (trang đã đặt 1.32em cho công thức)
+        css += `
+            .message-container p, .message-container li, .message-container td, .message-container th,
+            .rc-ocr-body, .w-chat-input textarea {
+                font-size:${cfg.fontSize}px !important;
+                ${font ? `font-family:${font}, sans-serif !important;` : ''}
+            }`;
+
+        // ---------- Phần NGOÀI khung tin nhắn: sidebar bài học, header, ô nhập, lớp phủ ----------
+        // Các phần này có CSS riêng (nền trắng cứng) nên trước giờ không ăn theme.
+        const panel = cfg.panelBg, pgBg = cfg.pageBg;
+        const pc = textColorFor(panel) || '#1f2937';      // chữ trên panel
+        const pgc = textColorFor(pgBg) || '#1f2937';      // chữ trên nền trang
+        const pt = textColorFor(p) || '#ffffff';          // chữ trên màu chủ đạo
+        const panel2 = mix(panel, pc, 0.05);              // thẻ/nút trên panel (hơi lệch tông để có chiều sâu)
+        const line = mix(panel, pc, 0.18);                // viền
+        const faint = mix(panel, pc, 0.55);               // chữ phụ / placeholder
+        const pgFaint = mix(pgBg, pgc, 0.55);
+        const pgPanel = mix(pgBg, pgc, 0.04);             // khung nội dung chính (lệch nhẹ so với nền trang)
+        const actBg = mix(panel, p, 0.14);                // nền mục đang chọn
+        const disBtn = mix(panel, p, 0.45);               // nút gửi khi đang disabled
+        // chữ màu chủ đạo phải ĐỌC ĐƯỢC trên nền panel: nền tối → sáng hoá, nền sáng → tối hoá
+        const accTxt = pc === '#ffffff' ? mix(p, '#ffffff', 0.55) : mix(p, '#000000', 0.25);
+        const TEXT = ':where(*:not(svg):not(svg *))';     // mọi phần tử chữ, trừ icon svg (svg thừa hưởng màu cha)
+        css += `
+            .chat-overlay { background-color:${pgBg} !important; }
+            #lesson-sidebar, .w-chat-header, .chat-footer, .w-chat-input { background-color:${panel} !important; border-color:${line} !important; }
+            .w-chat-input__card { background-color:${panel2} !important; border-color:${line} !important; }
+            .w-lesson-item, .w-sidebar-btn, .w-filter-badge, .w-chat-input__tabs, .w-chat-header__tools,
+            .message-font-size-button { background-color:${panel2} !important; border-color:${line} !important; }
+            .w-lesson-item__index { background-color:${line} !important; }
+            :where(.w-chat-header, .chat-footer, .w-chat-input) ${TEXT} { color:${pc} !important; }
+            /* sidebar: trang dùng class tiện ích (text-gray-800, bg-gray-50...) có !important → phải thắng bằng #id */
+            #lesson-sidebar *:not(svg):not(svg *) { color:${pc} !important; }
+            #lesson-sidebar > div:first-child { background-color:${panel} !important; border-color:${line} !important; }
+            #lesson-sidebar [class*="bg-gray"], #lesson-sidebar [class*="bg-white"] { background-color:${panel2} !important; border-color:${line} !important; }
+            .chat-disclaimer, .chat-footer-meta, .chat-context-path { color:${faint} !important; }
+            .w-chat-input textarea::placeholder { color:${faint} !important; opacity:1 !important; }
+            /* màu chủ đạo: nút mới, nút gửi, tab đang chọn, mục bài học đang chọn */
+            .w-header-new-btn, .w-send-btn:not([disabled]), .w-segment--active,
+            #lesson-sidebar .w-lesson-item--active .w-lesson-item__index,
+            .ant-btn-primary, .ant-btn-color-primary.ant-btn-variant-solid
+                { background-color:${p} !important; border-color:${p} !important; color:${pt} !important; }
+            .w-send-btn[disabled] { background-color:${disBtn} !important; border-color:${disBtn} !important; color:${pt} !important; }
+            #lesson-sidebar .w-lesson-item--active { background-color:${actBg} !important; border-color:${p} !important; }
+            .w-chat-input__card:focus-within { border-color:${p} !important; }`;
+
+        // ---------- Phần NGOÀI widget chat: chính trang web EduNext ----------
+        if (cfg.siteWide) {
+            const rgb = (hexToRgb(p) || [37, 99, 235]).join(',');
+            css += `
+            :root { --bs-primary:${p}; --bs-primary-rgb:${rgb}; }
+            html, body { background-color:${pgBg} !important; color:${pgc} !important; }
+            .left-navigation { background-color:${pgBg} !important; border-color:${line} !important; }
+            .cl-card, .cl-semester-nav, .cl-toolbar__search-input, .cl-header__right button,
+            .MuiPaper-root, .dropdown-menu, .modal-content, .ant-modal-content, .ant-card, .ant-dropdown-menu
+                { background:${panel} !important; background-color:${panel} !important; border-color:${line} !important; }
+            .cl-card__footer, .MuiTabs-root.edu-tabs-header, .cl-card__arrow, .cl-card__badge, .cl-card__chat-btn
+                { background-color:${panel2} !important; border-color:${line} !important; }
+            .MuiTabs-indicator { background-color:${panel} !important; }
+            .homepage-left-container { background-color:${pgPanel} !important; }
+            .cl-semester-nav__header { background-color:${panel} !important; border-color:${line} !important; }
+            .cl-semester-nav__count { background:${panel2} !important; color:${faint} !important; }
+            .cl-header__right button, .cl-header__right button * { color:${pc} !important; }
+            /* trang chủ ép tab/indicator trắng bằng selector rất dài + !important → phải dùng lại đúng selector đó (kèm html body để thắng) */
+            html body .homepage-left-container .edu-tabs .edu-tabs-header.MuiTabs-root .MuiTabs-indicator
+                { background:${panel} !important; background-color:${panel} !important; }
+            html body .homepage-left-container .edu-tabs .edu-tabs-header.MuiTabs-root .MuiTab-root { color:${faint} !important; }
+            html body .homepage-left-container .edu-tabs .edu-tabs-header.MuiTabs-root .MuiTab-root.Mui-selected { color:${pc} !important; }
+            .cl-notice { background-color:${actBg} !important; border-color:${line} !important; color:${accTxt} !important; }
+            .cl-card__icon { background-color:${actBg} !important; color:${accTxt} !important; }
+            .cl-semester-nav__item--active { background:${p} !important; }
+            .cl-semester-nav__item--active, .cl-semester-nav__item--active * { color:${pt} !important; }
+            :where(.cl-card, .cl-semester-nav, .cl-header__right button, .MuiTabs-root) ${TEXT} { color:${pc} !important; }
+            :where(.cl-header, .cl-toolbar) ${TEXT} { color:${pgc} !important; }
+            .cl-header__greeting { color:${pgFaint} !important; }
+            .cl-semester-nav__group-title, .cl-card__meta, .MuiTab-root:not(.Mui-selected) { color:${faint} !important; }
+            .cl-notice, .cl-notice * { color:${accTxt} !important; }
+            .cl-card__icon, .cl-card__icon * { color:${accTxt} !important; }
+            .cl-toolbar__search-input::placeholder { color:${faint} !important; }`;
+        }
+
+        // ---------- Kiểu KÍNH MỜ ----------
+        // Trang chat chỉ là 1 lớp (.chat-overlay) đè lên trang menu chứ không phải trang mới → ảnh nền gắn vào CHÍNH lớp chat đó
+        // (che kín trang menu phía sau, không bị lẫn GUI); trang menu giữ theme thường. Khung chat + sidebar là kính mờ,
+        // phần đặc biệt (menu, hộp thoại, nút chính, mục đang chọn) giữ khối đặc.
+        if (cfg.glass && img) {
+            const A = Math.min(0.95, Math.max(0.1, (+cfg.glassAlpha || 55) / 100));
+            const BL = Math.max(0, +cfg.glassBlur || 0);
+            const rgba = (hex, a) => 'rgba(' + (hexToRgb(hex) || [255, 255, 255]).join(',') + ',' + a.toFixed(2) + ')';
+            const outer = rgba(panel, A), inner = rgba(panel2, Math.min(0.95, A + 0.12)), bub = hex => rgba(hex, Math.min(0.95, A + 0.2));
+            const blurCss = `backdrop-filter:blur(${BL}px) saturate(1.3) !important; -webkit-backdrop-filter:blur(${BL}px) saturate(1.3) !important;`;
+            const bb = Math.max(0, +cfg.bgBlur || 0);
+            css += `
+            /* ảnh nền nằm trong lớp chat; isolation giữ ::before (z-index:-1) ở trong lớp này, không chui ra sau trang menu */
+            html body .chat-overlay { background:#000 !important; isolation:isolate; overflow:hidden; }
+            html body .chat-overlay::before { content:''; position:absolute; inset:${-bb * 2}px; z-index:-1; pointer-events:none;
+                background:url('${img}') center/cover no-repeat; ${bb ? `filter:blur(${bb}px);` : ''} }
+            /* kính: có blur phía sau */
+            html body .chat-popup, html body #lesson-sidebar
+                { background:${outer} !important; background-image:none !important; ${blurCss} }
+            html body .chat-popup::before { content:none !important; display:none !important; }
+            /* bên trong kính: chỉ pha màu nhẹ (blur lồng nhau không có tác dụng) */
+            html body .chat-window, html body .chat-body, html body .chat-content, html body .chat-messages { background:transparent !important; }
+            html body #lesson-sidebar > div:first-child, html body .w-chat-header, html body .chat-footer, html body .w-chat-input
+                { background:${rgba(panel, Math.max(0.1, A - 0.2))} !important; }
+            html body .w-chat-input__card, html body .w-lesson-item, html body .w-sidebar-btn, html body .w-filter-badge, html body .w-chat-input__tabs,
+            html body .w-chat-header__tools
+                { background:${inner} !important; }
+            html body .message-container.message-user { background:${bub(u)} !important; }
+            html body .message-container.message-assistant { background:${bub(b)} !important; }
+            /* khối ĐẶC (đặc biệt): menu, hộp thoại, nút chính, mục đang chọn */
+            html body .dropdown-menu, html body .modal-content, html body .ant-modal-content, html body .ant-dropdown-menu, html body .MuiPaper-root, html body .ant-card
+                { background:${panel} !important; backdrop-filter:none !important; -webkit-backdrop-filter:none !important; }
+            html body .w-header-new-btn, html body .w-send-btn:not([disabled]), html body .w-segment--active
+                { background-color:${p} !important; }
+            html body #lesson-sidebar .w-lesson-item--active { background-color:${actBg} !important; }`;
+        }
+        styleEl.textContent = css;
+    }
+    applyTheme(); ensureBgVideo();
+
+    // =====================================================================
+    // 3. ENTER = GỬI, SHIFT+ENTER = XUỐNG DÒNG
+    // =====================================================================
+    // Đăng ký ở WINDOW (capture) chứ không phải document: window-capture chạy trước document-capture,
+    // nên nếu trang cũng nghe Enter ở window-capture thì script (chạy ở document-start) vẫn đứng trước.
+    // Chế độ Text dùng <textarea>, chế độ Math dùng <math-field> (MathLive) → phải bắt cả hai.
+    const ENTER_SEL = 'textarea.w-md-editor-text-input, .w-chat-input textarea, .w-chat-input math-field';
+    const valueOf = t => String((t && t.value) || '');
+    let enterHandledAt = 0;
+    // Chat thường có nút .w-send-btn. Chế độ bài tập KHÔNG có nút đó mà có cột ý định (.exercise-intent-column__item):
+    // mặc định bấm nút đang được chọn của trang (vd. "Yêu cầu khác"); đặt exerciseIntent='submit' để luôn "Nộp câu trả lời".
+    function findSendTarget(t) {
+        const scope = (t.closest && t.closest('.w-chat-input')) || document;
+        const send = scope.querySelector('button.w-send-btn') || document.querySelector('button.w-send-btn');
+        if (send) return send;
+        const items = [...document.querySelectorAll('.exercise-intent-column__item')];
+        if (!items.length) return null;
+        const submit = items.find(b => /^Nộp câu trả lời/i.test(b.getAttribute('aria-label') || b.textContent || ''));
+        const active = items.find(b => b.classList.contains('is-active') || b.getAttribute('aria-pressed') === 'true');
+        return cfg.exerciseIntent === 'submit' ? (submit || active) : (active || submit);
+    }
+    function onEnterKey(e) {
+        if (!cfg.enterSend || e.key !== 'Enter') return;
+        if (e.shiftKey || e.ctrlKey || e.altKey || e.metaKey) return;   // Shift+Enter: để mặc định (xuống dòng)
+        if (e.isComposing) return;                                      // đang gõ dở trong IME: Enter chỉ chốt chữ
+        const t = e.target;
+        if (!t || !t.matches || !t.matches(ENTER_SEL)) return;
+        if (!findSendTarget(t)) return;   // không có nút nào để bấm → KHÔNG nuốt phím, để trang tự xử lý
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        enterHandledAt = Date.now();
+        // React có thể chưa kịp bật nút → tìm lại mỗi lần thử
+        const trySend = n => {
+            const btn = findSendTarget(t);
+            log('Enter → gửi', { mode: t.tagName.toLowerCase(), btn: btn ? (btn.getAttribute('aria-label') || btn.className).slice(0, 40) : null, disabled: !!(btn && btn.disabled), len: valueOf(t).length });
+            if (btn && !btn.disabled) btn.click();
+            else if (n > 0 && valueOf(t).trim()) setTimeout(() => trySend(n - 1), 80);
+        };
+        trySend(4);
+    }
+    window.addEventListener('keydown', onEnterKey, true);
+    // chặn nốt keypress/beforeinput xuống dòng ngay sau khi đã gửi (phòng trang chèn \n bằng đường khác)
+    const swallowEnter = e => {
+        if (cfg.enterSend && Date.now() - enterHandledAt < 200) { e.preventDefault(); e.stopImmediatePropagation(); }
+    };
+    window.addEventListener('keypress', e => { if (e.key === 'Enter') swallowEnter(e); }, true);
+    window.addEventListener('beforeinput', e => {
+        if (e.inputType === 'insertLineBreak' || e.inputType === 'insertParagraph') swallowEnter(e);
+    }, true);
+
+    // =====================================================================
+    // 4. QUÉT ẢNH → CHỮ (OCR)
+    //    Câu trả lời của bot là ảnh .webp ở cdn-lab.fpt.edu.vn/chats-artifacts/chat-canvas/...
+    //    được vẽ lên <canvas> (canvas bị tainted nên không toDataURL được) → ta bắt URL ảnh rồi tự tải về OCR.
+    // =====================================================================
+    const RES_RE = /chat-canvas|chats-artifacts/i;
+    const PART_RE = /chat-assistant(?:%3A|:)([^%/:]+)(?:%3A|:)part-(\d+)/i;
+    const groupId = u => { const m = PART_RE.exec(u); return m ? m[1] : u; };
+    const partNo = u => { const m = PART_RE.exec(u); return m ? +m[2] : 0; };
+
+    const urlState = new Map();   // url -> queued | done | fail
+    const textByUrl = new Map();  // url -> text đã OCR
+    const segByUrl = new Map();   // url -> [{type:'text'|'img'}] (chữ + hình cắt từ ảnh gốc)
+    let lastUrls = [], lastPreview = '(chưa có)';
+
+    const withTimeout = (p, ms) =>
+        Promise.race([p, new Promise((_, r) => setTimeout(() => r(new Error('Timeout ' + ms + 'ms')), ms))]);
+
+    let toastEl = null, toastT = 0;
+    function toast(msg) {
+        whenBody(() => {
+            if (!toastEl) {
+                toastEl = document.createElement('div');
+                toastEl.style.cssText = 'position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:2147483647;max-width:360px;padding:8px 14px;border-radius:10px;background:#0f172a;color:#fff;font:12px/1.4 sans-serif;box-shadow:0 4px 16px rgba(0,0,0,.3);pointer-events:none;transition:opacity .2s;';
+                document.body.appendChild(toastEl);
+            }
+            toastEl.textContent = msg;
+            toastEl.style.opacity = '1';
+            clearTimeout(toastT);
+            toastT = setTimeout(() => { toastEl.style.opacity = '0'; }, 3500);
+        });
+    }
+
+    // Mở ảnh ở tab nền (cdn-lab, không CSP) → tab đó OCR rồi ghi kết quả vào GM storage → ta nhận ở đây.
+    function ocrLegacy(url) {
+        return new Promise((resolve, reject) => {
+            const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+            const key = 'rc_ocr_' + id;
+            let tab = null, listener = null, timer = 0, finished = false;
+            const done = (err, text) => {
+                if (finished) return;
+                finished = true;
+                clearTimeout(timer);
+                try { GM_removeValueChangeListener(listener); } catch (e) {}
+                try { tab && tab.close && tab.close(); } catch (e) {}
+                try { GM_deleteValue(key); } catch (e) {}
+                err ? reject(err) : resolve(text);
+            };
+            listener = GM_addValueChangeListener(key, (name, oldV, newV) => {
+                if (!newV) return;
+                try {
+                    const r = typeof newV === 'string' ? JSON.parse(newV) : newV;
+                    r.error ? done(new Error(r.error)) : done(null, r);
+                } catch (e) { done(e); }
+            });
+            timer = setTimeout(() => done(new Error('Hết thời gian chờ tab OCR (120s)')), 120000);
+            try {
+                tab = GM_openInTab(url + '#rc-ocr=' + id + '&l=' + langsString(), { active: false, insert: true, setParent: true });
+            } catch (e) { done(e); }
+        });
+    }
+    // ----- OCR qua tab HUB chạy sẵn (nhanh hơn: không mở tab/khởi tạo lại mỗi ảnh, nhiều ảnh chạy song song) -----
+    const langsString = () => [cfg.ocrVie !== false && 'vie', cfg.ocrEng !== false && 'eng'].filter(Boolean).join('+') || 'vie';
+    const hubBeat = () => +GM_getValue('rc_ocr_hub', 0) || 0;
+    // Tab nền bị Chrome giãn timer (có thể chỉ 1 lần/phút) → nhịp tim thưa; ngưỡng rộng để không báo nhầm "chưa mở". Nếu hub chết thật thì ack timeout 5s sẽ mở lại.
+    const hubAlive = () => Date.now() - hubBeat() < 130000;
+    let hubOpening = null;
+    function openHub(seedUrl) {
+        if (hubOpening) return hubOpening;
+        const t = Date.now();
+        hubOpening = new Promise((resolve, reject) => {
+            try { GM_openInTab(seedUrl + '#rc-hub', { active: false, insert: true, setParent: true }); } catch (e) { reject(e); return; }
+            (function poll() {
+                if (hubBeat() >= t) return resolve();
+                if (Date.now() - t > 60000) return reject(new Error('Tab OCR không khởi động được'));
+                setTimeout(poll, 250);
+            })();
+        });
+        const clear = () => { hubOpening = null; };
+        hubOpening.then(clear, clear);
+        return hubOpening;
+    }
+    function postJob(job) {
+        let list = [];
+        try { list = JSON.parse(GM_getValue('rc_ocr_inbox', '[]')); } catch (e) {}
+        list = (Array.isArray(list) ? list : []).filter(j => Date.now() - j.ts < 5 * 60000).slice(-30);
+        list.push(job);
+        GM_setValue('rc_ocr_inbox', JSON.stringify(list));
+    }
+    function closeHub() { try { postJob({ id: 'quit' + Date.now(), cmd: 'quit', ts: Date.now() }); } catch (e) {} }
+    function ocrViaHub(url, partsHint) {
+        return new Promise((resolve, reject) => {
+            const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+            const key = 'rc_ocr_' + id;
+            let acked = false, finished = false, listener = null, timer = 0, ackT = 0, fresh = false;
+            const done = (err, res) => {
+                if (finished) return;
+                finished = true;
+                clearTimeout(timer); clearTimeout(ackT);
+                try { GM_removeValueChangeListener(listener); } catch (e) {}
+                try { GM_deleteValue(key); } catch (e) {}
+                err ? reject(err) : resolve(res);
+            };
+            listener = GM_addValueChangeListener(key, (nm, o, v) => {
+                if (!v) return;
+                let r; try { r = typeof v === 'string' ? JSON.parse(v) : v; } catch (e) { return done(e); }
+                if (r.ack) { acked = true; clearTimeout(ackT); return; }
+                r.error ? done(new Error(r.error)) : done(null, r);
+            });
+            timer = setTimeout(() => done(new Error('Hết thời gian chờ OCR (150s)')), 150000);
+            const send = () => {
+                postJob({ id, url, ts: Date.now(), langs: langsString(), n: partsHint(), threads: +cfg.ocrThreads || 0, idle: +cfg.hubIdle });
+                ackT = setTimeout(async () => {
+                    if (acked || finished) return;
+                    if (fresh) return done(new Error('Tab OCR không phản hồi'));
+                    fresh = true;                       // hub cũ có thể đã bị Chrome đóng/đóng băng → mở hub mới rồi gửi lại
+                    try { await openHub(url); send(); } catch (e) { done(e); }
+                }, 5000);
+            };
+            (async () => {
+                try {
+                    await new Promise(r => setTimeout(r, 0));     // chờ các phần khác của tin cùng được xếp hàng → biết cần bao nhiêu luồng
+                    if (hubAlive() && GM_getValue('rc_ocr_hub_ver', '') !== HUB_VER) {   // hub cũ (script bản trước) còn sống → thay bằng hub mới
+                        log('Tab OCR cũ (khác phiên bản) → mở lại');
+                        GM_setValue('rc_ocr_hub', 0); closeHub();
+                    }
+                    if (!hubAlive()) { await openHub(url); fresh = true; }
+                    send();
+                } catch (e) { done(e); }
+            })();
+        });
+    }
+    // Tự chọn: hub (nhanh) → nếu lỗi thì quay về cách cũ (mỗi ảnh 1 tab)
+    async function ocrUrl(url) {
+        if (!cfg.ocrHub) return ocrLegacy(url);
+        try {
+            return await ocrViaHub(url, () => queue.filter(x => groupId(x) === groupId(url)).length);
+        } catch (e) {
+            log('⚠ Tab OCR chạy sẵn lỗi (' + (e && e.message || e) + ') → dùng tab đơn');
+            return ocrLegacy(url);
+        }
+    }
+    // Link ảnh hết hạn sau ~360s và được ký lại → cùng 1 phần có thể có nhiều URL: mỗi phần chỉ lấy 1 lần (bản mới nhất)
+    function partsFor(id) {
+        const m = new Map();
+        [...textByUrl.keys()].filter(u => groupId(u) === id).forEach(u => m.set(partNo(u), u));
+        return [...m.entries()].sort((a, b) => a[0] - b[0]).map(e => e[1]);
+    }
+    function combinedFor(id) {
+        return partsFor(id).map(u => textByUrl.get(u)).filter(Boolean).join('\n\n').trim();
+    }
+    function segmentsFor(id) {
+        const out = [];
+        partsFor(id).forEach(u => (segByUrl.get(u) || []).forEach(g => out.push(g)));
+        return out;
+    }
+
+    // ---------- Thay ảnh câu trả lời bằng CHỮ ngay trong bong bóng của bot ----------
+    // Không xoá node của React (sẽ làm React lỗi khi render lại): chỉ ẩn khung ảnh bằng thuộc tính data-rc-hidden
+    // rồi chèn 1 khối chữ ngay sau nó. Chữ nằm trong chính .message-assistant nên ăn theme bong bóng, bôi đen/copy được.
+    const CONT_SEL = '.chat-messages [data-testid="chat-canvas-container"]';
+    const shown = new Map();   // groupId -> { text, idx, total } để vẽ lại nếu React render lại bong bóng
+    const containers = () => [...document.querySelectorAll(CONT_SEL)];
+    // URL ảnh của 1 khung = prop canvas.url trong React fiber (chính xác nhất để biết khung nào ứng với tin nào)
+    function urlOfContainer(cont) {
+        try {
+            const k = Object.keys(cont).find(x => x.startsWith('__reactFiber$'));
+            let f = k && cont[k];
+            for (let i = 0; f && i < 40; i++, f = f.return) {
+                const c = f.memoizedProps && f.memoizedProps.canvas;
+                if (!c) continue;
+                const first = Array.isArray(c) ? c[0] : c;
+                if (first && first.url) return first.url;
+            }
+        } catch (e) {}
+        return null;
+    }
+    // ---------- Nguồn LaTeX ----------
+    // Ảnh của bot do server vẽ nên Tesseract đọc công thức rất kém. Nhưng component React của tin nhắn có thể còn giữ
+    // văn bản gốc (markdown/LaTeX) trong props → quét fiber của bong bóng, lấy chuỗi nào trông giống LaTeX nhất.
+    const TEX_RE = /\\(?:frac|dfrac|sqrt|cdot|times|pi|alpha|beta|theta|sum|int|left|right|begin|end|text|mathrm|ge|le|geq|leq|neq|approx|circ|angle|degree)\b|\$[^$\n]+\$|\\\(|\\\[/;
+    const SKIP_KEY = /^(url|src|href|id|className|key|ref|style|testid|data-testid)$/i;
+    function texCandidates(cont) {
+        const out = [], seen = new Set();
+        const scan = (v, path, depth) => {
+            if (v == null || depth > 4) return;
+            if (typeof v === 'string') {
+                if (v.length >= 12 && TEX_RE.test(v) && !seen.has(v)) { seen.add(v); out.push({ path, lvl: +(String(path).match(/^L(\d+)/) || [0, 99])[1], text: v }); }
+                return;
+            }
+            if (typeof v !== 'object' || v instanceof Node || seen.has(v)) return;
+            seen.add(v);
+            const keys = Array.isArray(v) ? v.slice(0, 20).map((_, i) => i) : Object.keys(v).slice(0, 40);
+            keys.forEach(k => { if (!SKIP_KEY.test(String(k))) { try { scan(v[k], path + '.' + k, depth + 1); } catch (e) {} } });
+        };
+        try {
+            const k = Object.keys(cont).find(x => x.startsWith('__reactFiber$'));
+            let f = k && cont[k];
+            for (let i = 0; f && i < 25; i++, f = f.return) scan(f.memoizedProps, 'L' + i, 0);
+        } catch (e) {}
+        // ưu tiên props gần bong bóng nhất (tránh lấy nhầm cả lịch sử chat ở tầng trên), cùng tầng thì lấy chuỗi dài hơn
+        return out.sort((a, b) => a.lvl - b.lvl || b.text.length - a.text.length);
+    }
+    function latexSourceOf(cont) {
+        const c = texCandidates(cont);
+        return c.length ? c[0].text.trim() : null;
+    }
+    function probeLatex() {
+        const conts = [...document.querySelectorAll(CONT_SEL)];
+        if (!conts.length) { toast('Chưa có tin nhắn ảnh nào để dò'); return; }
+        let hit = 0;
+        conts.forEach((c, i) => {
+            const cands = texCandidates(c);
+            if (cands.length) hit++;
+            log('Dò LaTeX bong bóng #' + i, cands.length ? cands.slice(0, 5).map(x => x.path + ' → ' + x.text.slice(0, 160)) : '(không thấy chuỗi LaTeX trong props)');
+        });
+        toast(hit ? '🔬 Thấy nguồn LaTeX ở ' + hit + '/' + conts.length + ' bong bóng (xem Console [RC])' : '🔬 Trang không giữ nguồn LaTeX trong props — vẫn dùng OCR chữ');
+    }
+
+    // Tách text thành: chữ thường / hộp "Câu hỏi". Hộp bắt đầu ở dòng "Câu hỏi:" và kết thúc trước câu hướng dẫn định dạng ("Bạn hãy trả lời theo…", "Trả lời: […]").
+    function splitQuestionBoxes(text) {
+        const lines = String(text).split('\n');
+        const out = []; let cur = []; let i = 0;
+        const flushText = () => { const t = cur.join('\n').replace(/^\n+|\n+$/g, ''); if (t.trim()) out.push({ q: false, t }); cur = []; };
+        const isEnd = l => /^\s*(Bạn|Em|Các bạn|Hãy)\b.*(trả lời|viết|điền|nhập).*(định dạng|mẫu|như sau|sau đây|sau nhé|sau:)/i.test(l) || /^\s*Trả lời\s*:/i.test(l);
+        while (i < lines.length) {
+            const m = /^\s*Câu hỏi\s*:?\s*(.*)$/i.exec(lines[i]);
+            if (!m) { cur.push(lines[i++]); continue; }
+            flushText();
+            const body = m[1] ? [m[1]] : []; i++;
+            while (i < lines.length && !isEnd(lines[i])) body.push(lines[i++]);
+            const bt = body.join('\n').replace(/^\s*\n+|\n+\s*$/g, '').replace(/\n{3,}/g, '\n\n').replace(/([^.?!:;\n])\n(?=[a-zà-ỹ])/g, '$1 ');   // nối dòng bị OCR ngắt giữa câu (dòng sau bắt đầu bằng chữ thường)
+            if (bt.trim()) out.push({ q: true, t: bt }); else cur.push('Câu hỏi:');
+        }
+        flushText();
+        return out;
+    }
+    function renderTextSeg(body, t) {
+        const parts = cfg.qBox !== false ? splitQuestionBoxes(t) : [{ q: false, t }];
+        (parts.length ? parts : [{ q: false, t }]).forEach(pt => {
+            const d = document.createElement('div');
+            if (pt.q) {
+                d.className = 'rc-qbox';
+                const l = document.createElement('div'); l.className = 'rc-qlab'; l.textContent = 'Câu hỏi';
+                const b = document.createElement('div'); b.className = 'rc-qbody'; b.textContent = pt.t;
+                d.append(l, b);
+            } else { d.className = 'rc-seg-text'; d.textContent = pt.t; }
+            body.appendChild(d);
+        });
+    }
+    function applyToContainer(cont, text, segs) {
+        const host = cont.parentElement;
+        if (!host) return;
+        const tex = cfg.latexSource ? latexSourceOf(cont) : null;
+        if (tex) { segs = [{ type: 'text', text: tex }].concat((segs || []).filter(g => g.type === 'img')); text = tex; }
+        let box = host.querySelector(':scope > .rc-ocr-text');
+        if (!box) {
+            box = document.createElement('div');
+            box.className = 'rc-ocr-text';
+            box.innerHTML = '<div class="rc-ocr-body"></div><div class="rc-ocr-bar">' +
+                '<button type="button" data-a="copy">📋 Copy</button>' +
+                '<button type="button" data-a="img">🖼️ Xem ảnh gốc</button></div>';
+            box.addEventListener('click', e => {
+                const b = e.target.closest && e.target.closest('button[data-a]');
+                if (!b) return;
+                e.stopPropagation();
+                const body = box.querySelector('.rc-ocr-body');
+                if (b.dataset.a === 'copy') { GM_setClipboard(box.dataset.text || body.textContent, 'text'); toast('✅ Đã copy'); return; }
+                const c = host.querySelector(':scope > [data-testid="chat-canvas-container"]');
+                const wantImg = box.dataset.showImg !== '1';
+                box.dataset.showImg = wantImg ? '1' : '0';
+                if (c) c.setAttribute('data-rc-hidden', wantImg ? '0' : '1');
+                body.style.display = wantImg ? 'none' : '';
+                b.textContent = wantImg ? '🔤 Xem bản chữ' : '🖼️ Xem ảnh gốc';
+            });
+            cont.after(box);
+        }
+        const body = box.querySelector('.rc-ocr-body');
+        body.textContent = '';
+        if (segs && segs.length) {
+            segs.forEach(g => {
+                if (g.type === 'img') { const im = document.createElement('img'); im.className = 'rc-ocr-fig'; im.src = g.src; im.width = g.w; im.alt = 'Hình trong câu trả lời'; body.appendChild(im); }
+                else renderTextSeg(body, g.text);
+            });
+        } else renderTextSeg(body, text);
+        box.dataset.text = text;
+        box.dataset.src = tex ? 'latex' : 'ocr';
+        if (box.dataset.showImg !== '1') cont.setAttribute('data-rc-hidden', '1');
+    }
+    function showInBubble(id, text) {
+        const segs = segmentsFor(id);
+        if (!cfg.replaceBubble || !text) return;
+        const conts = containers();
+        if (!conts.length) return;
+        let idx = conts.findIndex(c => { const u = urlOfContainer(c); return u && groupId(u) === id; });
+        if (idx < 0) idx = conts.length - 1;   // không đọc được fiber → coi là bong bóng mới nhất
+        shown.set(id, { text, segs, idx, total: conts.length });
+        if (shown.size > 6) shown.delete(shown.keys().next().value);
+        applyToContainer(conts[idx], text, segs);
+    }
+    function reapplyAll() {
+        if (!cfg.replaceBubble) return;
+        const conts = containers();
+        shown.forEach(r => {
+            // chỉ vẽ lại khi số bong bóng không đổi (tránh gắn nhầm chữ cũ vào tin mới)
+            if (conts.length !== r.total || !conts[r.idx]) return;
+            const host = conts[r.idx].parentElement;
+            if (host && !host.querySelector(':scope > .rc-ocr-text')) applyToContainer(conts[r.idx], r.text, r.segs);
+        });
+    }
+    function restoreBubbles() {
+        document.querySelectorAll('.rc-ocr-text').forEach(b => b.remove());
+        document.querySelectorAll('[data-rc-hidden]').forEach(c => c.removeAttribute('data-rc-hidden'));
+    }
+    let moT = 0;
+    whenBody(() => {
+        new MutationObserver(() => { clearTimeout(moT); moT = setTimeout(reapplyAll, 250); })
+            .observe(document.body, { childList: true, subtree: true });
+    });
+
+    // `queue` = các ảnh đang quét (chạy SONG SONG; hub dùng nhiều worker). busy giữ lại cho phần UI cũ.
+    const queue = []; let busy = false;
+    const grpPending = new Map(), grpFailed = new Set();
+    function enqueue(url) {
+        const s = urlState.get(url);
+        if (s === 'queued' || s === 'done') return;
+        if ([...textByUrl.keys()].some(k => groupId(k) === groupId(url) && partNo(k) === partNo(url))) { urlState.set(url, 'done'); return; }
+        urlState.set(url, 'queued');
+        queue.push(url);
+        const g = groupId(url);
+        if (!grpPending.has(g)) grpPending.set(g, new Set());
+        grpPending.get(g).add(url);
+        runJob(url);
+    }
+    function finalizeGroup(g) {
+        const full = combinedFor(g);
+        if (full) {
+            if (cfg.autoCopy) GM_setClipboard(full, 'text');
+            lastPreview = full.slice(0, 120);
+            toast(cfg.autoCopy ? '✅ Đã quét + copy ' + full.length + ' ký tự' : '✅ Đã quét ' + full.length + ' ký tự');
+            log('✅ OCR xong (' + full.length + ' ký tự):\n' + full);   // in đủ, không cắt
+        } else if (!grpFailed.has(g)) {
+            toast('Không đọc được chữ trong ảnh');
+        }
+        grpFailed.delete(g);
+    }
+    async function runJob(u) {
+        const g = groupId(u), t0 = Date.now();
+        try {
+            toast('🔎 Đang quét ' + queue.length + ' ảnh...');
+            const res = await ocrUrl(u);
+            const t = (res && res.text) || '';
+            textByUrl.set(u, t);
+            segByUrl.set(u, (res && res.segments) || (t ? [{ type: 'text', text: t }] : []));
+            urlState.set(u, 'done');
+            const ms = (res && res.ms) || {};
+            log('⏱ part-' + partNo(u) + ': ' + (Date.now() - t0) + 'ms tổng' + (ms.total ? ' (hub: tải ' + ms.load + ' · khởi tạo ' + ms.pool + ' · OCR ' + ms.ocr + ' · xử lý ' + ms.post + ' · ' + ms.workers + ' luồng · ' + (ms.strips || 1) + ' dải' + (ms.stripMs && ms.stripMs.length ? ' [' + ms.stripMs.join('/') + 'ms]' : '') + (ms.t ? ' · xử lý: đọc px ' + ms.t.lay + ', bảng ' + ms.t.bang + ', vùng ' + ms.t.vung + ', hình ' + ms.t.hinh + ' (' + ms.t.hinhs + ' hình)' : '') + ')' : ' (tab đơn: OCR ' + (ms.ocr || '?') + 'ms)'));
+            const full = combinedFor(g);
+            if (full) showInBubble(g, full);   // hiện dần từng phần ngay khi xong
+        } catch (e) {
+            urlState.set(u, 'fail');
+            grpFailed.add(g);
+            toast('❌ ' + (e.message || e));
+            log('❌ Lỗi OCR:', e);
+        } finally {
+            const i = queue.indexOf(u); if (i >= 0) queue.splice(i, 1);
+            const set = grpPending.get(g);
+            if (set) { set.delete(u); if (!set.size) { grpPending.delete(g); finalizeGroup(g); } }
+        }
+    }
+
+    // Tự động: gom các ảnh mới về trong 1.5s, chỉ OCR nhóm (tin nhắn) mới nhất
+    // → khi mở lại lịch sử chat sẽ không OCR cả chục tin cũ.
+    let pending = [], pendT = 0;
+    function noteUrl(url) {
+        if (!url || !RES_RE.test(url)) return;
+        if (!lastUrls.includes(url)) { lastUrls.push(url); if (lastUrls.length > 30) lastUrls.shift(); }
+        if (!cfg.wip) return;
+        pending.push(url);
+        clearTimeout(pendT);
+        pendT = setTimeout(() => {
+            const list = pending; pending = [];
+            const id = groupId(list[list.length - 1]);
+            list.filter(x => groupId(x) === id).forEach(enqueue);
+        }, 1500);
+    }
+    function allChatUrls() {
+        const seen = new Set(), out = [];
+        let names = [];
+        try { names = performance.getEntriesByType('resource').map(e => e.name); } catch (e) {}
+        [...names, ...lastUrls].forEach(u => { if (RES_RE.test(u) && !seen.has(u)) { seen.add(u); out.push(u); } });
+        return out;
+    }
+    // Quét ép tin mới nhất (chuột phải vào nút OCR)
+    function forceScan() {
+        const urls = allChatUrls();
+        if (!urls.length) { toast('Chưa thấy ảnh câu trả lời nào'); return; }
+        const id = groupId(urls[urls.length - 1]);
+        const mine = urls.filter(u => groupId(u) === id);
+        const cached = combinedFor(id);
+        if (cached && mine.every(u => [...textByUrl.keys()].some(k => groupId(k) === id && partNo(k) === partNo(u)))) {
+            GM_setClipboard(cached, 'text');
+            showInBubble(id, cached);
+            toast('✅ Đã copy lại ' + cached.length + ' ký tự');
+            return;
+        }
+        mine.forEach(u => { if (urlState.get(u) === 'fail') urlState.delete(u); enqueue(u); });
+    }
+
+    // Lưới 1: PerformanceObserver — thấy mọi ảnh trang tải, kể cả ảnh vẽ vào canvas
+    try {
+        try { performance.setResourceTimingBufferSize(1000); } catch (e) {}
+        new PerformanceObserver(list => list.getEntries().forEach(e => noteUrl(e.name)))
+            .observe({ type: 'resource', buffered: true });
+    } catch (e) { log('PerformanceObserver lỗi:', e); }
+
+    // Lưới 2: hook drawImage (dự phòng khi ảnh lấy từ cache nên không có resource entry)
+    try {
+        const P = unsafeWindow.CanvasRenderingContext2D.prototype;
+        const od = P.drawImage;
+        P.drawImage = function (s, ...a) {
+            try { if (s && s.tagName === 'IMG') noteUrl(s.currentSrc || s.src); } catch (e) {}
+            return od.call(this, s, ...a);
+        };
+    } catch (e) { log('Hook drawImage lỗi:', e); }
+
+    // =====================================================================
+    // 5. GIAO DIỆN (nút 🎨 + nút OCR)
+    // =====================================================================
+    function initUI() {
+        try { initUIInner(); } catch (e) { log('⚠ initUI lỗi:', e && e.stack || e); toast('⚠ Lỗi giao diện: ' + (e && e.message || e)); }
+    }
+    function initUIInner() {
+        if (document.getElementById('rc-kit')) return;
+        const esc = s => String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+        const COLOR_KEYS = [
+            ['primary', 'Màu chủ đạo'], ['userBubble', 'Tin của bạn'], ['botBubble', 'Tin của bot'],
+            ['msgBg', 'Nền tin nhắn'], ['chatBg', 'Viền khung chat'], ['panelBg', 'Nền panel'], ['pageBg', 'Nền trang'],
+        ];
+        const PRESETS = [
+            { n: 'Mặc định', c: { primary: '#2563eb', userBubble: '#dbeafe', botBubble: '#ffffff', msgBg: '#ffffff', chatBg: '#f8fafc', panelBg: '#ffffff', pageBg: '#ffffff' } },
+            { n: 'Tối', c: { primary: '#6366f1', userBubble: '#312e81', botBubble: '#1e293b', msgBg: '#0f172a', chatBg: '#334155', panelBg: '#1e293b', pageBg: '#0b1120' } },
+            { n: 'Hồng', c: { primary: '#db2777', userBubble: '#fce7f3', botBubble: '#fdf2f8', msgBg: '#fff1f7', chatBg: '#9d174d', panelBg: '#fbcfe8', pageBg: '#f9a8d4' } },
+            { n: 'Rừng', c: { primary: '#16a34a', userBubble: '#dcfce7', botBubble: '#f0fdf4', msgBg: '#f7fee7', chatBg: '#14532d', panelBg: '#d1fae5', pageBg: '#a7f3d0' } },
+            { n: 'Hoàng hôn', c: { primary: '#ea580c', userBubble: '#ffedd5', botBubble: '#fff7ed', msgBg: '#fffbeb', chatBg: '#7c2d12', panelBg: '#fed7aa', pageBg: '#fdba74' } },
+        ];
+        const TOGGLES = [
+            ['enterSend', 'Enter để gửi', 'Shift+Enter xuống dòng'],
+            ['antiPaste', 'Cho phép dán (Ctrl+V)', 'Gỡ chặn anti-paste của trang'],
+            ['antiCopy', 'Cho phép copy / chuột phải / chọn chữ', 'Gỡ chặn anti-copy của trang'],
+            ['wip', 'Tự quét ảnh (OCR)', 'Bot trả lời bằng ảnh → đọc thành chữ'],
+            ['replaceBubble', 'Thay ảnh bằng chữ', 'Hiện chữ + giữ hình vẽ ngay trong bong bóng', 1],
+            ['autoCopy', 'Tự copy chữ', 'Quét xong copy vào clipboard', 1],
+            ['qBox', 'Hộp trắng cho câu hỏi', 'Khung "Câu hỏi:" giống bản gốc của bot', 1],
+            ['latexSource', 'Ưu tiên nguồn LaTeX', 'Nếu trang giữ công thức gốc thì dùng thay cho chữ OCR', 1],
+            ['siteWide', 'Đổi màu cả trang web', 'Áp theme ra ngoài khung chat'],
+        ];
+
+        const tgHtml = ([k, t, d, sub]) => `<label class="tg${sub ? ' sub' : ''}" data-tg="${k}"><div><b>${t}</b><span>${d}</span></div><input type="checkbox" data-k="${k}" ${cfg[k] !== false && cfg[k] ? 'checked' : ''}><i class="sl"></i></label>`;
+        const OCR_KEYS = ['wip', 'replaceBubble', 'autoCopy', 'qBox', 'latexSource'];
+
+        const KIT_CSS = `
+:host{all:initial}
+*{box-sizing:border-box;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+.w{--bg:#fff;--fg:#0f172a;--mut:#64748b;--line:#e2e8f0;--chip:#f1f5f9;--acc:#2563eb;--shadow:0 12px 40px rgba(15,23,42,.28)}
+@media (prefers-color-scheme:dark){.w{--bg:#1e293b;--fg:#f1f5f9;--mut:#94a3b8;--line:#334155;--chip:#334155;--shadow:0 12px 40px rgba(0,0,0,.55)}}
+.dock{position:fixed;left:16px;bottom:16px;display:flex;gap:8px;align-items:center}
+.btn{border:none;cursor:pointer;color:#fff;box-shadow:0 2px 10px rgba(0,0,0,.3);transition:transform .12s,background .2s}
+.btn:hover{transform:translateY(-1px)} .btn:active{transform:scale(.96)}
+.gear{width:40px;height:40px;border-radius:50%;background:#0f172a;font-size:18px}
+.pill{height:40px;padding:0 14px 0 12px;border-radius:20px;font:600 12px system-ui;display:flex;align-items:center;gap:7px;background:#94a3b8}
+.pill.on{background:#16a34a} .pill.busy{background:#d97706}
+.dot{width:8px;height:8px;border-radius:50%;background:#fff;opacity:.9}
+.pill.busy .dot{animation:pulse 1s infinite}
+@keyframes pulse{50%{opacity:.25;transform:scale(.7)}}
+.panel{position:fixed;left:16px;bottom:68px;width:320px;max-height:min(78vh,640px);display:none;flex-direction:column;background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow);overflow:hidden;font-size:13px}
+.panel.open{display:flex;animation:pop .14s ease-out}
+@keyframes pop{from{opacity:0;transform:translateY(8px) scale(.98)}}
+.hd{display:flex;align-items:center;justify-content:space-between;padding:12px 14px 6px}
+.hd b{font-size:14px} .hd small{color:var(--mut);margin-left:6px}
+.x{cursor:pointer;border:none;background:none;color:var(--mut);font-size:16px;padding:2px 6px;border-radius:6px}
+.x:hover{background:var(--chip)}
+.tabs{display:flex;gap:4px;margin:4px 14px 0;padding:3px;background:var(--chip);border-radius:10px}
+.tab{flex:1;border:none;background:none;color:var(--mut);padding:6px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer}
+.tab.act{background:var(--bg);color:var(--fg);box-shadow:0 1px 3px rgba(0,0,0,.15)}
+.body{padding:12px 14px;overflow:auto;flex:1}
+.sec{display:none} .sec.act{display:block}
+h4{margin:0 0 8px;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--mut)}
+.presets{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
+.pre{border:1px solid var(--line);background:var(--bg);color:var(--fg);border-radius:10px;padding:5px 9px 5px 6px;font-size:12px;cursor:pointer;display:flex;align-items:center;gap:6px}
+.pre:hover{border-color:var(--acc)}
+.sw{display:inline-flex;width:22px;height:14px;border-radius:5px;overflow:hidden;border:1px solid rgba(0,0,0,.15)}
+.sw i{flex:1}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:8px 10px;margin-bottom:14px}
+.col{display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer}
+.col input{width:30px;height:30px;border:1px solid var(--line);border-radius:8px;padding:0;background:none;cursor:pointer;flex:none}
+.fld{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:8px 0;font-size:12px}
+.fld input[type=text],.fld select{width:150px;padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--fg);font-size:12px}
+.fld input[type=range]{width:130px;accent-color:var(--acc)}
+.val{color:var(--mut);min-width:26px;text-align:right}
+.sm{border:1px solid var(--line);background:var(--chip);color:var(--fg);border-radius:8px;padding:6px 10px;font-size:12px;cursor:pointer}
+.sm:hover{border-color:var(--acc)}
+.row2{display:flex;gap:6px}
+.tg{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 0;border-bottom:1px solid var(--line);cursor:pointer}
+.tg.sub{padding-left:16px}
+.tg:last-of-type{border-bottom:none}
+.tg b{display:block;font-size:13px;font-weight:600} .tg span{display:block;font-size:11px;color:var(--mut);margin-top:1px}
+.tg input{display:none}
+.sl{flex:none;width:36px;height:20px;border-radius:10px;background:#cbd5e1;position:relative;transition:background .18s}
+.sl:after{content:"";position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#fff;transition:transform .18s;box-shadow:0 1px 3px rgba(0,0,0,.3)}
+.tg input:checked+.sl{background:var(--acc)} .tg input:checked+.sl:after{transform:translateX(16px)}
+.tg.off{opacity:.45;pointer-events:none}
+.ft{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 14px;border-top:1px solid var(--line);font-size:11px;color:var(--mut)}
+kbd{background:var(--chip);border:1px solid var(--line);border-radius:5px;padding:1px 5px;font:600 10px system-ui}
+.inl{display:flex;align-items:center;gap:6px}
+.mt{margin-top:14px}
+.fl{flex:1}
+.chk{display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer}
+.wide{width:100%;margin-top:6px}
+[hidden]{display:none!important}
+.stat{padding:8px 10px;border-radius:10px;background:var(--chip);font-size:11px;color:var(--mut);margin-top:12px;word-break:break-word}
+`;
+        const host = document.createElement('div');
+        host.id = 'rc-kit';
+        host.style.cssText = 'position:fixed;left:0;bottom:0;z-index:2147483647;';
+        const root = host.attachShadow({ mode: 'open' });   // shadow DOM: CSS của trang (tailwind !important...) không lọt vào được
+        root.innerHTML = `
+<div class="w">
+  <div class="panel" id="panel">
+    <div class="hd"><div><b>🎨 Ultimate RC</b><small>v5.14</small></div><button class="x" id="rk-close" title="Đóng (Esc)">✕</button></div>
+    <div class="tabs"><button class="tab" data-tab="theme">Giao diện</button><button class="tab" data-tab="feat">Tính năng</button><button class="tab" data-tab="ocr">OCR</button></div>
+    <div class="body">
+      <div class="sec" data-sec="theme">
+        <h4>Bộ màu nhanh</h4>
+        <div class="presets">${PRESETS.map((p, i) => `<button class="pre" data-pre="${i}"><span class="sw">${['primary', 'userBubble', 'botBubble', 'pageBg'].map(k => `<i data-c="${p.c[k]}"></i>`).join('')}</span>${p.n}</button>`).join('')}</div>
+        <h4>Tuỳ chỉnh màu</h4>
+        <div class="grid">${COLOR_KEYS.map(([k, l]) => `<label class="col"><input type="color" data-k="${k}" value="${cfg[k]}">${l}</label>`).join('')}</div>
+        <h4>Chữ</h4>
+        <div class="fld"><span>Cỡ chữ</span><span class="inl"><input type="range" data-k="fontSize" min="12" max="22" value="${cfg.fontSize}"><span class="val" id="fsv">${cfg.fontSize}px</span></span></div>
+        <div class="fld"><span>Font</span><input type="text" data-k="fontFamily" value="${esc(cfg.fontFamily)}" placeholder="VD: Segoe UI"></div>
+        <h4 class="mt">Ảnh / video nền</h4>
+        <div class="fld"><span>Link</span><input type="text" data-k="bgImage" value="${/^(data:|rc-vid:)/.test(cfg.bgImage) ? '' : esc(cfg.bgImage)}" placeholder="${/^(data:|rc-vid:)/.test(cfg.bgImage) ? '(đã tải lên)' : 'https://… ảnh, GIF, WebP, MP4, WebM'}"></div>
+        <div class="fld"><span>Làm mờ</span><input type="range" data-k="bgBlur" min="0" max="20" value="${cfg.bgBlur}"></div>
+        <div class="row2"><button class="sm fl" id="up">📁 Tải ảnh/video lên</button><button class="sm fl" id="clearbg">Xoá ảnh nền</button></div>
+        <label class="tg" data-tg="autoTheme"><div><b>Tự phối màu theo ảnh nền</b><span>Đổi ảnh nền → theme tự đổi màu cho hợp</span></div><input type="checkbox" data-k="autoTheme" ${cfg.autoTheme ? 'checked' : ''}><i class="sl"></i></label>
+        <label class="tg" data-tg="glass"><div><b>Kiểu kính mờ (nền trang chat)</b><span>Ảnh làm nền trang chat, khung chat thành kính mờ</span></div><input type="checkbox" data-k="glass" ${cfg.glass ? 'checked' : ''}><i class="sl"></i></label>
+        <div class="fld"><span>Độ mờ kính</span><input type="range" data-k="glassBlur" min="0" max="30" value="${cfg.glassBlur}"></div>
+        <div class="fld"><span>Độ đặc của kính</span><input type="range" data-k="glassAlpha" min="15" max="90" value="${cfg.glassAlpha}"></div>
+        <button class="sm fl wide" id="rk-pal">🪄 Lấy màu từ ảnh nền ngay</button>
+        <input type="file" id="file" accept="image/*,video/mp4,video/webm,.gif,.webp,.mp4,.webm" hidden>
+      </div>
+      <div class="sec" data-sec="feat">
+        <h4>Chặn của trang</h4>
+        ${TOGGLES.filter(t => ['antiPaste', 'antiCopy'].includes(t[0])).map(tgHtml).join('')}
+        <h4 class="mt">Chat</h4>
+        ${TOGGLES.filter(t => ['enterSend'].includes(t[0])).map(tgHtml).join('')}
+        <div class="fld mt"><span>Chế độ bài tập: Enter =</span>
+          <select data-k="exerciseIntent"><option value="active" ${cfg.exerciseIntent !== 'submit' ? 'selected' : ''}>nút đang chọn</option><option value="submit" ${cfg.exerciseIntent === 'submit' ? 'selected' : ''}>Nộp câu trả lời</option></select></div>
+        <h4 class="mt">Giao diện</h4>
+        ${TOGGLES.filter(t => ['siteWide'].includes(t[0])).map(tgHtml).join('')}
+      </div>
+      <div class="sec" data-sec="ocr">
+        ${TOGGLES.filter(t => OCR_KEYS.includes(t[0])).map(tgHtml).join('')}
+        <h4 class="mt">Động cơ OCR</h4>
+        <div class="fld"><span>Ngôn ngữ đọc</span><span class="inl"><label class="chk"><input type="checkbox" data-k="ocrVie" ${cfg.ocrVie !== false ? 'checked' : ''}>Tiếng Việt</label><label class="chk"><input type="checkbox" data-k="ocrEng" ${cfg.ocrEng !== false ? 'checked' : ''}>English</label></span></div>
+        <div class="fld"><span>Luồng song song</span>
+          <select data-k="ocrThreads">${[[0, 'Tự động (CPU − 1)'], [1, '1'], [2, '2'], [3, '3'], [4, '4'], [6, '6'], [8, '8']].map(([v, l]) => `<option value="${v}" ${+cfg.ocrThreads === v ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
+        <label class="tg" data-tg="ocrHub"><div><b>Giữ tab OCR chạy sẵn</b><span>Quét nhanh hơn, không mở tab mới mỗi ảnh</span></div><input type="checkbox" data-k="ocrHub" ${cfg.ocrHub ? 'checked' : ''}><i class="sl"></i></label>
+        <div class="fld"><span>Tự đóng tab OCR sau</span>
+          <select data-k="hubIdle">${[[3, '3 phút'], [10, '10 phút'], [30, '30 phút'], [0, 'Không tự đóng']].map(([v, l]) => `<option value="${v}" ${+cfg.hubIdle === v ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
+        <button class="sm wide" id="rk-hubclose">Đóng tab OCR ngay</button>
+        <button class="sm wide" id="rk-probe">🔬 Dò nguồn LaTeX trong các tin nhắn</button>
+        <div class="stat" id="stat"></div>
+      </div>
+    </div>
+    <div class="ft"><span>Mở/đóng: <kbd>Alt</kbd>+<kbd>C</kbd> · Đóng: <kbd>Esc</kbd></span><button class="sm" id="rk-reset">Đặt lại</button></div>
+  </div>
+  <div class="dock"><button class="btn gear" id="gear" title="Cài đặt (Alt+C)">🎨</button><button class="btn pill" id="pill"><i class="dot"></i><span id="pt">OCR</span></button></div>
+</div>`;
+        // CSP của EduNext chặn <style> inline → dùng constructable stylesheet (không bị CSP style-src chặn)
+        try {
+            const sheet = new CSSStyleSheet(); sheet.replaceSync(KIT_CSS);
+            root.adoptedStyleSheets = [sheet];
+        } catch (e) {
+            const st = document.createElement('style'); st.textContent = KIT_CSS; root.prepend(st);
+        }
+        document.body.appendChild(host);
+        root.querySelectorAll('i[data-c]').forEach(i => { i.style.background = i.dataset.c; });
+        const $ = s => root.querySelector(s), $$ = s => [...root.querySelectorAll(s)];
+        const panel = $('#panel'), pill = $('#pill'), stat = $('#stat');
+
+        const setTab = t => {
+            cfg.uiTab = t; save();
+            $$('.tab').forEach(b => b.classList.toggle('act', b.dataset.tab === t));
+            $$('.sec').forEach(s => s.classList.toggle('act', s.dataset.sec === t));
+        };
+        setTab(['feat', 'ocr'].includes(cfg.uiTab) ? cfg.uiTab : 'theme');
+        $$('.tab').forEach(b => b.addEventListener('click', () => setTab(b.dataset.tab)));
+
+        root.addEventListener('input', e => {
+            const t = e.target, k = t.dataset && t.dataset.k;
+            if (!k) return;
+            if (t.type === 'checkbox') cfg[k] = t.checked;
+            else if (t.type === 'range') cfg[k] = +t.value;
+            else if (t.tagName === 'SELECT' && /^\d+$/.test(t.value)) cfg[k] = +t.value;
+            else cfg[k] = t.value;
+            if ((k === 'ocrVie' || k === 'ocrEng') && !cfg.ocrVie && !cfg.ocrEng) { cfg.ocrVie = true; t.checked = true; if (k === 'ocrVie') { /* giữ lại tick */ } toast('Phải chọn ít nhất 1 ngôn ngữ'); }
+            if (k === 'fontSize') $('#fsv').textContent = cfg.fontSize + 'px';
+            save(); applyTheme(); try { render(); } catch (_) {}
+            if (k === 'wip' && cfg.wip) forceScan();
+            if (k === 'glass' && cfg.glass && !cfg.bgImage) toast('⚠ Kiểu kính mờ cần có ảnh nền — hãy dán link hoặc tải ảnh lên');
+            if (k === 'qBox' && cfg.replaceBubble) { restoreBubbles(); reapplyAll(); }
+            if (k === 'replaceBubble') { if (cfg.replaceBubble) reapplyAll(); else restoreBubbles(); }
+        });
+        $$('.pre').forEach(b => b.addEventListener('click', () => {
+            const p = PRESETS[+b.dataset.pre];
+            Object.assign(cfg, p.c); save(); applyTheme();
+            COLOR_KEYS.forEach(([k]) => { const i = $('input[data-k="' + k + '"]'); if (i) i.value = cfg[k]; });
+            toast('🎨 Bộ màu: ' + p.n);
+        }));
+        $('#rk-reset')?.addEventListener('click', () => {
+            if (!confirm('Đặt lại toàn bộ cài đặt về mặc định?')) return;
+            cfg = Object.assign({}, DEFAULTS); save(); location.reload();
+        });
+        $('#clearbg')?.addEventListener('click', () => { cfg.bgImage = ''; try { GM_deleteValue(VID_KEY); } catch (e) {} save(); applyTheme(); const i = $('input[data-k="bgImage"]'); if (i) { i.value = ''; i.placeholder = 'https://… ảnh, GIF, WebP, MP4, WebM'; } });
+        syncInputs = () => COLOR_KEYS.forEach(([k]) => { const i = $('input[data-k="' + k + '"]'); if (i) i.value = cfg[k]; });
+        $('#rk-pal')?.addEventListener('click', () => {
+            const src = bgSrc(cfg.bgImage || '');
+            if (!cfg.bgImage) toast('Chưa có ảnh nền — hãy dán link hoặc tải ảnh lên trước');
+            else if (!src) toast('⏳ Đang tải ảnh nền, bấm lại sau vài giây');
+            else autoThemeFrom(src, true);
+        });
+        $('#rk-probe')?.addEventListener('click', probeLatex);
+        $('#rk-hubclose')?.addEventListener('click', () => { closeHub(); toast('Đã gửi lệnh đóng tab OCR'); });
+        $('#up')?.addEventListener('click', () => $('#file').click());
+        $('#file')?.addEventListener('change', e => {
+            const f = e.target.files[0];
+            if (!f) return;
+            const isVid = /^video\//i.test(f.type) || /\.(mp4|webm)$/i.test(f.name);
+            if (isVid && f.size > VID_MAX) { toast('❌ Video quá nặng (' + Math.round(f.size / 1048576) + 'MB) — tải lên tối đa ' + Math.round(VID_MAX / 1048576) + 'MB, hoặc dùng link'); e.target.value = ''; return; }
+            const rd = new FileReader();
+            rd.onload = () => {
+                if (isVid) {
+                    try { GM_setValue(VID_KEY, rd.result); } catch (err) { toast('❌ Không lưu được video: ' + (err && err.message || err)); return; }
+                    delete bgCache[VID_LOCAL]; delete bgVid[VID_LOCAL];
+                    cfg.bgImage = VID_LOCAL; save(); applyTheme(); toast('🎬 Đã đặt video nền');
+                } else { cfg.bgImage = rd.result; save(); applyTheme(); toast(f.type === 'image/gif' || f.type === 'image/webp' ? '🖼️ Đã đặt ảnh nền (ảnh động chạy được)' : '🖼️ Đã đặt ảnh nền'); }
+                e.target.value = '';
+            };
+            rd.readAsDataURL(f);
+        });
+
+        const togglePanel = on => { panel.classList.toggle('open', on === undefined ? !panel.classList.contains('open') : on); };
+        $('#gear')?.addEventListener('click', () => togglePanel());
+        $('#rk-close')?.addEventListener('click', () => togglePanel(false));
+        window.addEventListener('keydown', e => {
+            if (e.altKey && !e.ctrlKey && !e.metaKey && e.code === 'KeyC') { e.preventDefault(); togglePanel(); }
+            else if (e.key === 'Escape' && panel.classList.contains('open')) togglePanel(false);
+        }, true);
+
+        // trạng thái WIP + tiến độ quét
+        const render = () => {
+          try {
+            const working = busy || queue.length > 0;
+            pill.className = 'btn pill' + (working ? ' busy' : cfg.wip ? ' on' : '');
+            $('#pt').textContent = working ? 'OCR…' : 'OCR';
+            pill.title = cfg.wip ? 'Tự quét ảnh: BẬT · click để tắt · chuột phải: quét ép tin mới nhất' : 'Tự quét ảnh: tắt · click để bật';
+            const hubTxt = cfg.ocrHub ? (hubAlive() ? '🟢 Tab OCR đang chạy (' + GM_getValue('rc_ocr_hub_info', '…') + ')' : '⚪ Tab OCR chưa mở — tự mở khi có ảnh') : '⚪ Tab OCR chạy sẵn: tắt (mỗi ảnh mở 1 tab)';
+            stat.textContent = (working ? '🔎 Đang quét ' + queue.length + ' ảnh… · ' : '') + hubTxt + (working ? '' : ' · Gần nhất: ' + lastPreview + (lastPreview.length >= 120 ? '…' : ''));
+            $$('.tg.sub').forEach(t => t.classList.toggle('off', !cfg.wip));
+          } catch (e) { log('⚠ render UI lỗi:', e); try { stat.textContent = '⚠ ' + (e && e.message || e); } catch (_) {} }
+        };
+        pill.addEventListener('click', () => {
+            cfg.wip = !cfg.wip; save(); render();
+            const cb = $('input[data-k="wip"]'); if (cb) cb.checked = cfg.wip;
+            toast(cfg.wip ? '🔎 OCR bật: tự quét ảnh mới' : '🔎 OCR tắt');
+            if (cfg.wip) forceScan();
+        });
+        pill.addEventListener('contextmenu', e => { e.preventDefault(); forceScan(); });
+
+        setInterval(render, 800);
+        render();
+    }
+    whenBody(initUI);
+
+    log('Ultimate RC tools v5.14 sẵn sàng');
+})();

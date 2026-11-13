@@ -1,0 +1,33 @@
+# Local browser profiles, tools, experiments and release staging
+/.transfer/
+/extension/_metadata/
+
+# Dependencies and compiler caches
+node_modules/
+/rust-kernels/target/
+
+# Local release archives (publish reviewed builds separately)
+/*.zip
+
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+!.env.sample
+*.pem
+*.key
+*.p12
+*.pfx
+credentials*.json
+*service-account*.json
+.npmrc
+.netrc
+
+# Editor, OS and temporary files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.log
+*.tmp
+*.bak

@@ -1,0 +1,17 @@
+{
+  "sourceTests": "passed",
+  "rendered": {
+    "icons": 4,
+    "copiedOcr": "[emoji/ký hiệu trong ảnh] Chúc mừng em hoàn thành buổi học!\n\n[emoji/ký hiệu trong ảnh] Kỷ lục chuỗi đúng liên tiếp: 5 câu\n\n[emoji/ký hiệu trong ảnh] Điểm mạnh\n\nNormal plain text remains selectable.\n\nHẹn gặp em ở buổi học tiếp theo! [emoji/ký hiệu trong ảnh]",
+    "copiedSource": "🎉 Chúc mừng! S_q = πR²; C = 2πR. 💪",
+    "remainingIcons": 0
+  },
+  "one": "[emoji/ký hiệu trong ảnh] Chúc mừng em hoàn thành buổi học!\n\n[emoji/ký hiệu trong ảnh] Kỷ lục chuỗi đúng liên tiếp: 5 câu\n\n[emoji/ký hiệu trong ảnh] Điểm mạnh\n\nNormal plain text remains selectable.\n\nHẹn gặp em ở buổi học tiếp theo! [emoji/ký hiệu trong ảnh]",
+  "two": "[emoji/ký hiệu trong ảnh] Chúc mừng em hoàn thành buổi học!\n\n[emoji/ký hiệu trong ảnh] Kỷ lục chuỗi đúng liên tiếp: 5 câu\n\n[emoji/ký hiệu trong ảnh] Điểm mạnh\n\nNormal plain text remains selectable.\n\nHẹn gặp em ở buổi học tiếp theo! [emoji/ký hiệu trong ảnh]",
+  "math": "Tuyệt vời, bạn đã tính toán chính xác rồi! [emoji/ký hiệu trong ảnh] Cách giải quyết bài toán hình học này của bạn rất chuẩn xác. [emoji/ký hiệu trong ảnh]\n\nTiếp tục với thử thách tiếp theo nhé:\nCâu hỏi:\nCho hình quạt tròn có bán kính R, góc ở tâm n°, độ dài cung | và diện tích toàn phần của hình tròn S\n\n[Công thức: xem ảnh gốc]\n\nHãy trả lời theo định dang sau nhé [emoji/ký hiệu trong ảnh]\n\nTrả lời: [đáp án của bạn]",
+  "counts": {
+    "one": 4,
+    "two": 4,
+    "math": 3
+  }
+}

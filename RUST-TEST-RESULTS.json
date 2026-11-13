@@ -1,0 +1,35 @@
+{
+  "version": "5.15.0",
+  "wasmBytes": 32718,
+  "reports": [
+    {
+      "name": "Gamma/grayscale pixels exactly match original JavaScript",
+      "status": "passed"
+    },
+    {
+      "name": "150 palettes match original colors, including grayscale and transparency",
+      "status": "passed"
+    },
+    {
+      "name": "30 figure layouts and text-strip crop sets match original bounding boxes",
+      "status": "passed"
+    },
+    {
+      "name": "Generated JavaScript fallback preserves figure and strip results",
+      "status": "passed"
+    },
+    {
+      "name": "WASM loading failure activates fallback without rejecting startup",
+      "status": "passed"
+    },
+    {
+      "name": "Malformed dimensions and oversized allocation are rejected",
+      "status": "passed"
+    }
+  ],
+  "timings": {
+    "pixels": 1260000,
+    "rustWithCopiesMs": 8.605600000000095,
+    "originalJsMs": 15.533500000000004
+  }
+}

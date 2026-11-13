@@ -1,0 +1,42 @@
+{
+  "version": "5.15.0",
+  "browser": "157.0.8103.50",
+  "results": [
+    {
+      "name": "Baseline: media-src none blocks blob video without rule",
+      "status": "passed"
+    },
+    {
+      "name": "Real HTTPS response: CSP enforcement and report-only no longer block/report media",
+      "status": "passed"
+    },
+    {
+      "name": "Local uploaded wallpaper plays in normal chat mode",
+      "status": "passed"
+    },
+    {
+      "name": "Glass mode moves the same playing video to overlay",
+      "status": "passed"
+    },
+    {
+      "name": "Uploaded wallpaper and glass setting survive reload",
+      "status": "passed"
+    },
+    {
+      "name": "URL wallpaper download plays through existing media bridge",
+      "status": "passed"
+    },
+    {
+      "name": "Unrelated host keeps its CSP header",
+      "status": "passed"
+    },
+    {
+      "name": "EduNext sub-frame media is also unblocked",
+      "status": "passed"
+    },
+    {
+      "name": "Video background color matching uses Rust palette",
+      "status": "passed"
+    }
+  ]
+}
