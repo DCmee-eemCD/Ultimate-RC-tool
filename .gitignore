@@ -32,3 +32,24 @@ Thumbs.db
 *.log
 *.tmp
 *.bak
+
+# Local secrets and credentials
+*.secret
+secrets/
+.env.local
+
+# Python caches
+__pycache__/
+*.pyc
+
+# Temporary test output
+coverage/
+playwright-report/
+test-results/
+
+# Local development documentation
+/CONTEXT.md
+/RULES.md
+
+# Local AI agent configuration
+/.agents/skills/
