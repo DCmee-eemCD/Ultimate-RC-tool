@@ -657,6 +657,16 @@
         const pgPanel = mix(pgBg, pgc, 0.04);             // khung nội dung chính (lệch nhẹ so với nền trang)
         const actBg = mix(panel, p, 0.14);                // nền mục đang chọn
         const disBtn = mix(panel, p, 0.45);               // nút gửi khi đang disabled
+        // The actions menu is rendered outside the chat header by Ant Design.
+        css += `
+            html body .w-actions-dropdown.ant-dropdown-menu { background:${panel} !important; color:${pc} !important; }
+            html body .w-actions-dropdown .ant-dropdown-menu-item,
+            html body .w-actions-dropdown .ant-dropdown-menu-item :is(span, a, svg) { color:${pc} !important; }
+            html body .w-actions-dropdown .ant-dropdown-menu-item-group-title,
+            html body .w-actions-dropdown .ant-dropdown-menu-item-disabled,
+            html body .w-actions-dropdown .ant-dropdown-menu-item-disabled :is(span, a, svg) { color:${mix(panel, pc, 0.72)} !important; }
+            html body .w-actions-dropdown .ant-dropdown-menu-item:not(.ant-dropdown-menu-item-disabled):is(:hover, :focus-visible, .ant-dropdown-menu-item-active) { background:${line} !important; }
+        `;
         // chữ màu chủ đạo phải ĐỌC ĐƯỢC trên nền panel: nền tối → sáng hoá, nền sáng → tối hoá
         const accTxt = pc === '#ffffff' ? mix(p, '#ffffff', 0.55) : mix(p, '#000000', 0.25);
         const TEXT = ':where(*:not(svg):not(svg *))';     // mọi phần tử chữ, trừ icon svg (svg thừa hưởng màu cha)
@@ -1248,6 +1258,7 @@
             ['msgBg', 'Nền tin nhắn'], ['chatBg', 'Viền khung chat'], ['panelBg', 'Nền panel'], ['pageBg', 'Nền trang'],
         ];
         const PRESETS = [
+            { n: 'Discord Dark', c: { primary: '#40444b', userBubble: '#40444b', botBubble: '#2f3136', msgBg: '#2f3136', chatBg: '#292b2f', panelBg: '#292b2f', pageBg: '#202225' } },
             { n: 'Mặc định', c: { primary: '#2563eb', userBubble: '#dbeafe', botBubble: '#ffffff', msgBg: '#ffffff', chatBg: '#f8fafc', panelBg: '#ffffff', pageBg: '#ffffff' } },
             { n: 'Tối', c: { primary: '#6366f1', userBubble: '#312e81', botBubble: '#1e293b', msgBg: '#0f172a', chatBg: '#334155', panelBg: '#1e293b', pageBg: '#0b1120' } },
             { n: 'Hồng', c: { primary: '#db2777', userBubble: '#fce7f3', botBubble: '#fdf2f8', msgBg: '#fff1f7', chatBg: '#9d174d', panelBg: '#fbcfe8', pageBg: '#f9a8d4' } },

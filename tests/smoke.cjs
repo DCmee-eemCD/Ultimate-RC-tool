@@ -75,7 +75,8 @@ const root=path.resolve(__dirname,'..');
     await page.locator('#rc-kit #gear').waitFor();
     await page.locator('#rc-kit #gear').click();
     assert.equal(await page.locator('#rc-kit .tab').count(),4);
-    assert.equal(await page.locator('#rc-kit [data-k]').count(),30);
+    assert.equal(await page.locator('#rc-kit input[data-k="sourceFirst"]').count(),1);
+    assert.equal(await page.locator('#rc-kit input[data-k="wip"]').count(),1);
     await page.screenshot({path:path.join(root,'.transfer','gui.png'),animations:'disabled'});
     check('Original three-tab GUI loads with strict page CSP');
     await page.locator('#rc-kit [data-pre="1"]').click();
@@ -98,14 +99,16 @@ const root=path.resolve(__dirname,'..');
     const url='https://cdn-lab.fpt.edu.vn/chats-artifacts/chat-canvas/chat-assistant:test-one:part-0.png';
     await page.evaluate(async url=>{
       const container=document.querySelector('[data-testid="chat-canvas-container"]');
-      container.__reactFiber$fixture={memoizedProps:{canvas:{url},content:'Exact formula: \\frac{1}{2} + \\sqrt{4}'}};
+      const canvas={url,object_key:'fixture-one'};
+      container.__reactFiber$fixture={memoizedProps:{canvas},return:{memoizedProps:{messages:[{role:'assistant',content:'Exact formula: \\frac{1}{2} + \\sqrt{4}',metadata:{canvas}}]}}};
       const im=new Image();im.src=url;await im.decode();document.querySelector('canvas').getContext('2d').drawImage(im,0,0);
     },url);
-    await page.locator('#rc-kit #pill').click();
     await page.locator('.rc-ocr-text').waitFor({timeout:150000});
     assert.match(await page.locator('.rc-ocr-body').innerText(),/\\frac/);
     assert.equal(await page.locator('.rc-ocr-text').getAttribute('data-src'),'latex');
     assert.ok(!context.pages().some(p=>p.url().includes('/ocr.html')),'No OCR tab opened');
+    // Source-first must not need OCR. Exercise real packaged OCR separately.
+    await page.evaluate(url=>RC.ocr({url,langs:'vie+eng',threads:2,idle:120,keepWarm:true}),url);
     const info=await page.evaluate(()=>GM_getValue('rc_ocr_hub_info'));
     assert.equal(await page.evaluate(()=>GM_getValue('rc_ocr_status').backend),'rust');
     const paletteBackend=await page.evaluate(async()=>{await RC.palette(new Uint8ClampedArray([255,0,0,255]));return RC.paletteBackend;});

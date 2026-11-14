@@ -1,5 +1,9 @@
 import fs from 'node:fs/promises';
+import {execFileSync} from 'node:child_process';
 import {upgrade} from './scripts/build-transforms.mjs';
+execFileSync(process.execPath, ['node_modules/@tailwindcss/cli/dist/index.mjs', '-i', 'source/console.css', '-o', 'extension/console.css', '--minify'], {stdio:'inherit'});
+await fs.copyFile('node_modules/daisyui/LICENSE', 'extension/DAISYUI-LICENSE.txt');
+await fs.copyFile('node_modules/tailwindcss/LICENSE', 'extension/TAILWIND-LICENSE.txt');
 const {version} = JSON.parse(await fs.readFile('extension/manifest.json', 'utf8'));
 const source = await fs.readFile(new URL('./source/Ultimate-RC-tools-5.14.txt', import.meta.url), 'utf8');
 await fs.mkdir('extension', {recursive:true});

@@ -1,14 +1,15 @@
         // Theme files intentionally exclude OCR, clipboard and other behavior settings.
         const themeKeys = ['primary','userBubble','botBubble','chatBg','msgBg','panelBg','pageBg','fontSize','fontFamily','bgImage','bgBlur','autoTheme','glass','glassBlur','glassAlpha','siteWide'];
-        const colors = [...themeKeys.slice(0,7), 'dashboardBg'];
-        themeKeys.push('dashboardBg', 'imageThemeMode');
-        const ranges = {fontSize:[12,22],bgBlur:[0,20],glassBlur:[0,30],glassAlpha:[15,90]};
+        const colors = [...themeKeys.slice(0,7), 'dashboardBg', 'consolePrimary', 'consoleSecondary'];
+        themeKeys.push('dashboardBg', 'imageThemeMode', 'consolePrimary', 'consoleSecondary', 'consoleWidth', 'consoleHeight');
+        const ranges = {fontSize:[12,22],bgBlur:[0,20],glassBlur:[0,30],glassAlpha:[15,90],consoleWidth:[320,560],consoleHeight:[420,820]};
         const dataMedia = /^data:(?:image\/(?:png|jpeg|gif|webp|avif)|video\/(?:mp4|webm));base64,[A-Za-z0-9+/]*={0,2}$/;
         const validateTheme = doc => {
             if(!doc || doc.format !== 'ultimate-rc-theme' || doc.version !== 1 || !doc.theme || typeof doc.theme !== 'object' || Array.isArray(doc.theme)) throw Error('File theme không đúng định dạng hoặc phiên bản.');
             if(Object.keys(doc).some(k=>!['format','version','theme','video'].includes(k)))throw Error('File có trường không hợp lệ.');
             // Older portable themes do not contain the dashboard color.
             const t={dashboardBg:cfg.dashboardBg || DEFAULTS.dashboardBg, imageThemeMode:cfg.imageThemeMode || 'dark'};
+            for (const key of ['consolePrimary','consoleSecondary','consoleWidth','consoleHeight']) t[key] = cfg[key] ?? DEFAULTS[key];
             for(const [k,v] of Object.entries(doc.theme)) {
                 if(!themeKeys.includes(k))throw Error('Thuộc tính không hợp lệ: '+k);
                 let ok;

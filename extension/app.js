@@ -19,7 +19,7 @@
     // 2. CẤU HÌNH + THEME
     // =====================================================================
     const DEFAULTS = {
-        dashboardBg: '#1e293b', imageThemeMode: 'dark',
+        dashboardBg: '#1e293b', consolePrimary: '#78a6ff', consoleSecondary: '#b6a0ff', consoleWidth: 380, consoleHeight: 620, imageThemeMode: 'dark',
         primary: '#2563eb', userBubble: '#dbeafe', botBubble: '#ffffff',
         chatBg: '#f8fafc',   // viền/khung ngoài của popup chat
         msgBg: '#ffffff',    // vùng tin nhắn bên trong
@@ -29,12 +29,13 @@
         replaceBubble: true, // thay ảnh câu trả lời của bot bằng chữ ngay trong bong bóng
         autoCopy: true,      // quét xong tự copy chữ vào clipboard
         fontSize: 15, fontFamily: '', bgImage: '', bgBlur: 0,
-        enterSend: true, exerciseIntent: 'active', wip: false, uiTab: 'theme', autoTheme: true, autoFor: '', latexSource: true, glass: false, glassBlur: 14, glassAlpha: 55,
+        enterSend: true, exerciseIntent: 'active', wip: false, sourceFirst: true, uiTab: 'theme', autoTheme: true, autoFor: '', latexSource: true, glass: false, glassBlur: 14, glassAlpha: 55,
         antiPaste: true, antiCopy: true, qBox: true, ocrVie: true, ocrEng: true, ocrThreads: 0, ocrHub: true, hubIdle: 10,
     };
     let cfg = Object.assign({}, DEFAULTS);
     await RC.ready;
     Object.assign(cfg, GM_getValue('chatKit', {}));
+    if (cfg.sourceFirst) cfg.wip = false;
     const save = () => GM_setValue('chatKit', cfg);
 
     function textColorFor(bg) {
@@ -241,7 +242,11 @@
         const [h, s, l] = rgb2hsl(...hexToRgb(seed));
         const light = cfg.imageThemeMode === 'light';
         const bg = hsl2hex(h, Math.min(s, 0.45), light ? Math.max(0.90, Math.min(l, 0.97)) : Math.max(0.07, Math.min(l, 0.18)));
-        const accent = hsl2hex(h, Math.min(s, 0.75), light ? 0.36 : 0.72);
+        const accentColor = value => {
+            const [hue, sat] = rgb2hsl(...hexToRgb(value));
+            return hsl2hex(hue, Math.max(.5, Math.min(sat, .85)), light ? .38 : .76);
+        };
+        const accent = accentColor(cfg.consolePrimary || '#78a6ff');
         const fg = light ? '#172033' : '#f1f5f9';
         const values = {
             '--bg': bg,
@@ -250,6 +255,8 @@
             '--line': mix(bg, fg, 0.22),
             '--chip': mix(bg, fg, 0.10),
             '--acc': accent,
+            '--secondary': accentColor(cfg.consoleSecondary || '#b6a0ff'),
+            '--surface': mix(bg, fg, 0.035),
             '--switch-off': mix(bg, accent, 0.22),
             '--switch-knob': fg,
             '--switch-on-knob': bg,
@@ -257,6 +264,17 @@
         };
         for (const [key, value] of Object.entries(values)) wrapper.style.setProperty(key, value);
         wrapper.style.colorScheme = light ? 'light' : 'dark';
+        for (const [key, min, max, fallback, variable] of [
+            ['consoleWidth', 320, 560, 380, '--console-width'],
+            ['consoleHeight', 420, 820, 620, '--console-height']
+        ]) {
+            const value = Number.isFinite(cfg[key]) ? Math.max(min, Math.min(max, cfg[key])) : fallback;
+            wrapper.style.setProperty(variable, value + 'px');
+            const input = wrapper.querySelector('[data-k="' + key + '"]');
+            if (input) { input.value = value; input.style.setProperty('--fill', 100 * (value-min)/(max-min) + '%'); }
+            const output = wrapper.querySelector('[data-size-output="' + key + '"]');
+            if (output) output.textContent = value + ' px';
+        }
     }
 
     function imagePaletteMode(palette, mode) {
@@ -366,6 +384,16 @@
         const pgPanel = mix(pgBg, pgc, 0.04);             // khung nội dung chính (lệch nhẹ so với nền trang)
         const actBg = mix(panel, p, 0.14);                // nền mục đang chọn
         const disBtn = mix(panel, p, 0.45);               // nút gửi khi đang disabled
+        // The actions menu is rendered outside the chat header by Ant Design.
+        css += `
+            html body .w-actions-dropdown.ant-dropdown-menu { background:${panel} !important; color:${pc} !important; }
+            html body .w-actions-dropdown .ant-dropdown-menu-item,
+            html body .w-actions-dropdown .ant-dropdown-menu-item :is(span, a, svg) { color:${pc} !important; }
+            html body .w-actions-dropdown .ant-dropdown-menu-item-group-title,
+            html body .w-actions-dropdown .ant-dropdown-menu-item-disabled,
+            html body .w-actions-dropdown .ant-dropdown-menu-item-disabled :is(span, a, svg) { color:${mix(panel, pc, 0.72)} !important; }
+            html body .w-actions-dropdown .ant-dropdown-menu-item:not(.ant-dropdown-menu-item-disabled):is(:hover, :focus-visible, .ant-dropdown-menu-item-active) { background:${line} !important; }
+        `;
         // chữ màu chủ đạo phải ĐỌC ĐƯỢC trên nền panel: nền tối → sáng hoá, nền sáng → tối hoá
         const accTxt = pc === '#ffffff' ? mix(p, '#ffffff', 0.55) : mix(p, '#000000', 0.25);
         const TEXT = ':where(*:not(svg):not(svg *))';     // mọi phần tử chữ, trừ icon svg (svg thừa hưởng màu cha)
@@ -597,42 +625,53 @@
     // ---------- Nguồn LaTeX ----------
     // Ảnh của bot do server vẽ nên Tesseract đọc công thức rất kém. Nhưng component React của tin nhắn có thể còn giữ
     // văn bản gốc (markdown/LaTeX) trong props → quét fiber của bong bóng, lấy chuỗi nào trông giống LaTeX nhất.
-    const TEX_RE = /\\(?:frac|dfrac|sqrt|cdot|times|pi|alpha|beta|theta|sum|int|left|right|begin|end|text|mathrm|ge|le|geq|leq|neq|approx|circ|angle|degree)\b|\$[^$\n]+\$|\\\(|\\\[/;
-    const SOURCE_KEY = /^(content|text|markdown|message|answer|response|body|source|rawText)$/i;
-    const SKIP_KEY = /^(url|src|href|id|className|key|ref|style|children|messages|history|conversation|testid|data-testid)$/i;
+    // Only read the exact message owning this canvas, never beforeContent or hints.
     function texCandidates(cont) {
-        const out = [], seen = new Set();
-        let budget=300;
-        const scan = (v,path,depth,lvl,key) => {
-            if (v == null || depth > 4 || --budget < 0) return;
-            if (typeof v === 'string') {
-                if (v.length >= 2 && v.length <= 200000 && !seen.has(v) &&
-                    (TEX_RE.test(v) || SOURCE_KEY.test(key)) && !/^\s*(?:https?:|data:)/i.test(v)) {
-                    seen.add(v); out.push({path,lvl,text:v});
-                }
-                return;
-            }
-            // Never search lists of other messages or React children.
-            if (typeof v !== 'object' || Array.isArray(v) || v instanceof Node || seen.has(v)) return;
-            seen.add(v);
-            for (const k of Object.keys(v).slice(0,40)) if (!SKIP_KEY.test(k)) {
-                try { scan(v[k],path+'.'+k,depth+1,lvl,k); } catch (_) {}
-            }
-        };
         try {
-            const key=Object.keys(cont).find(k=>k.startsWith('__reactFiber$'));
-            let f=key && cont[key];
-            for(let lvl=0;f && lvl<12;lvl++,f=f.return) {
-                if (lvl && f.stateNode instanceof Element &&
-                    (f.stateNode.matches('.chat-messages') || f.stateNode.querySelectorAll('[data-testid="chat-canvas-container"]').length>1)) break;
-                scan(f.memoizedProps,'L'+lvl,0,lvl,'');
-                if(out.length) break;
+            const key = Object.keys(cont).find(k => k.startsWith('__reactFiber$'));
+            let f = key && cont[key], canvas = null;
+            for (let lvl = 0; f && lvl < 20; lvl++, f = f.return) {
+                const props = f.memoizedProps;
+                if (!canvas && props?.canvas) {
+                    const cs = Array.isArray(props.canvas) ? props.canvas : [props.canvas];
+                    if (cs.length !== 1) return [];
+                    canvas = cs[0];
+                }
+                if (!canvas || !Array.isArray(props?.messages)) continue;
+                if (props.messages.length > 2000) return [];
+                const matches = props.messages.filter(m => {
+                    const c = m?.metadata?.canvas;
+                    return m?.role === 'assistant' && c && !Array.isArray(c) &&
+                        (c === canvas || (canvas.object_key && c.object_key === canvas.object_key));
+                });
+                if (matches.length !== 1) return [];
+                const text = matches[0].content;
+                return typeof text === 'string' && text.trim() && text.length <= 200000
+                    ? [{path: 'L' + lvl + '.messages[matched].content', lvl, text}] : [];
             }
         } catch (_) {}
-        return out.sort((a,b)=>a.lvl-b.lvl || b.text.length-a.text.length);
+        return [];
     }
     function latexSourceOf(cont) {
         return texCandidates(cont)[0]?.text.trim() || null;
+    }
+    function originalResult(url) {
+        if (!cfg.sourceFirst) return null;
+        const matches = containers().filter(c => urlOfContainer(c) === url);
+        if (matches.length !== 1) return null;
+        const text = latexSourceOf(matches[0]);
+        return text ? {text, segments: [{type: 'text', text}], original: true} : null;
+    }
+    function recoverOriginals() {
+        if (!cfg.sourceFirst || !cfg.replaceBubble) return;
+        for (const cont of containers()) {
+            const text = latexSourceOf(cont);
+            if (!text) continue;
+            const box = cont.parentElement?.querySelector(':scope > .rc-ocr-text');
+            if (box?.dataset.src === 'latex' && box.dataset.text === text) continue;
+            const segs = segByUrl.get(urlOfContainer(cont)) || [];
+            applyToContainer(cont, text, [{type: 'text', text}, ...segs.filter(g => g.type === 'img' && !g.preserved)]);
+        }
     }
 
     function probeLatex() {
@@ -681,7 +720,7 @@
     function applyToContainer(cont, text, segs) {
         const host = cont.parentElement;
         if (!host) return;
-        const tex = cfg.latexSource ? latexSourceOf(cont) : null;
+        const tex = cfg.sourceFirst ? latexSourceOf(cont) : null;
         if (tex) { segs = [{ type: 'text', text: tex }].concat((segs || []).filter(g => g.type === 'img' && !g.preserved)); text = tex; }
         let box = host.querySelector(':scope > .rc-ocr-text');
         if (!box) {
@@ -733,17 +772,19 @@
         const conts = containers();
         if (!conts.length) return;
         let idx = conts.findIndex(c => { const u = urlOfContainer(c); return u && groupId(u) === id; });
-        if (idx < 0) idx = conts.length - 1;   // không đọc được fiber → coi là bong bóng mới nhất
+        if (idx < 0) return;   // không đọc được fiber → coi là bong bóng mới nhất
         shown.set(id, { text, segs, idx, total: conts.length });
         if (shown.size > 6) shown.delete(shown.keys().next().value);
         applyToContainer(conts[idx], text, segs);
     }
     function reapplyAll() {
+        recoverOriginals();
         if (!cfg.replaceBubble) return;
         const conts = containers();
-        shown.forEach(r => {
+        shown.forEach((r, id) => {
             // chỉ vẽ lại khi số bong bóng không đổi (tránh gắn nhầm chữ cũ vào tin mới)
             if (conts.length !== r.total || !conts[r.idx]) return;
+            if (groupId(urlOfContainer(conts[r.idx]) || "") !== id) return;
             const host = conts[r.idx].parentElement;
             if (host && !host.querySelector(':scope > .rc-ocr-text')) applyToContainer(conts[r.idx], r.text, r.segs);
         });
@@ -778,7 +819,7 @@
             if (cfg.autoCopy) GM_setClipboard(full, 'text');
             lastPreview = full.slice(0, 120);
             toast(cfg.autoCopy ? '✅ Đã quét + copy ' + full.length + ' ký tự' : '✅ Đã quét ' + full.length + ' ký tự');
-            log('✅ OCR xong (' + full.length + ' ký tự):\n' + full);   // in đủ, không cắt
+            log('✅ Văn bản sẵn sàng (' + full.length + ' ký tự):\n' + full);   // in đủ, không cắt
         } else if (!grpFailed.has(g)) {
             toast('Không đọc được chữ trong ảnh');
         }
@@ -787,8 +828,9 @@
     async function runJob(u) {
         const g = groupId(u), t0 = Date.now();
         try {
-            toast('🔎 Đang quét ' + queue.length + ' ảnh...');
-            const res = await ocrUrl(u);
+            toast(cfg.sourceFirst ? 'Đang lấy văn bản · OCR dự phòng khi cần' : 'Đang quét ' + queue.length + ' ảnh...');
+            const res = originalResult(u) || await ocrUrl(u);
+            if (res.original) log('Văn bản gốc: bỏ qua OCR');
             const t = (res && res.text) || '';
             textByUrl.set(u, t);
             segByUrl.set(u, (res && res.segments) || (t ? [{ type: 'text', text: t }] : []));
@@ -815,11 +857,12 @@
     function noteUrl(url) {
         if (!url || !RES_RE.test(url)) return;
         if (!lastUrls.includes(url)) { lastUrls.push(url); if (lastUrls.length > 30) lastUrls.shift(); }
-        if (!cfg.wip) return;
+        if (!cfg.wip && !cfg.sourceFirst) return;
         pending.push(url);
         clearTimeout(pendT);
         pendT = setTimeout(() => {
             const list = pending; pending = [];
+            if (!cfg.wip && !cfg.sourceFirst) return;
             const id = groupId(list[list.length - 1]);
             list.filter(x => groupId(x) === id).forEach(enqueue);
         }, 1500);
@@ -877,10 +920,13 @@
         const esc = s => String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
         const COLOR_KEYS = [
             ['dashboardBg', 'Nền bảng điều khiển'],
+            ['consolePrimary', 'Màu chính · bảng điều khiển'],
+            ['consoleSecondary', 'Màu phụ · bảng điều khiển'],
             ['primary', 'Màu chủ đạo'], ['userBubble', 'Tin của bạn'], ['botBubble', 'Tin của bot'],
             ['msgBg', 'Nền tin nhắn'], ['chatBg', 'Viền khung chat'], ['panelBg', 'Nền panel'], ['pageBg', 'Nền trang'],
         ];
         const PRESETS = [
+            { n: 'Discord Dark', c: { primary: '#40444b', userBubble: '#40444b', botBubble: '#2f3136', msgBg: '#2f3136', chatBg: '#292b2f', panelBg: '#292b2f', pageBg: '#202225' } },
             { n: 'Mặc định', c: { primary: '#2563eb', userBubble: '#dbeafe', botBubble: '#ffffff', msgBg: '#ffffff', chatBg: '#f8fafc', panelBg: '#ffffff', pageBg: '#ffffff' } },
             { n: 'Tối', c: { primary: '#6366f1', userBubble: '#312e81', botBubble: '#1e293b', msgBg: '#0f172a', chatBg: '#334155', panelBg: '#1e293b', pageBg: '#0b1120' } },
             { n: 'Hồng', c: { primary: '#db2777', userBubble: '#fce7f3', botBubble: '#fdf2f8', msgBg: '#fff1f7', chatBg: '#9d174d', panelBg: '#fbcfe8', pageBg: '#f9a8d4' } },
@@ -895,12 +941,12 @@
             ['replaceBubble', 'Thay ảnh bằng chữ', 'Hiện chữ + giữ hình vẽ ngay trong bong bóng', 1],
             ['autoCopy', 'Tự copy chữ', 'Quét xong copy vào clipboard', 1],
             ['qBox', 'Hộp trắng cho câu hỏi', 'Khung "Câu hỏi:" giống bản gốc của bot', 1],
-            ['latexSource', 'Ưu tiên văn bản gốc', 'Giữ nguyên Unicode, emoji và LaTeX khi trang có văn bản gốc', 1],
+            ['sourceFirst', 'Ưu tiên văn bản gốc', 'Dùng chữ gốc khi có; tự dùng OCR dự phòng nếu thiếu'],
             ['siteWide', 'Đổi màu cả trang web', 'Áp theme ra ngoài khung chat'],
         ];
 
         const tgHtml = ([k, t, d, sub]) => `<label class="tg${sub ? ' sub' : ''}" data-tg="${k}"><div><b>${t}</b><span>${d}</span></div><input type="checkbox" data-k="${k}" ${cfg[k] !== false && cfg[k] ? 'checked' : ''}><i class="sl"></i></label>`;
-        const OCR_KEYS = ['wip', 'replaceBubble', 'autoCopy', 'qBox', 'latexSource'];
+        const OCR_KEYS = ['wip', 'replaceBubble', 'autoCopy', 'qBox', 'sourceFirst'];
 
         const KIT_CSS = `
 :host{all:initial}
@@ -981,6 +1027,7 @@ kbd{background:var(--chip);border:1px solid var(--line);border-radius:5px;paddin
 [hidden]{display:none!important}
 .stat{padding:8px 10px;border-radius:10px;background:var(--chip);font-size:11px;color:var(--mut);margin-top:12px;word-break:break-word}
 `;
+        const CONSOLE_CSS = "/*! tailwindcss v4.3.5 | MIT License | https://tailwindcss.com */\n@layer daisyui.l1.l2.l3{:where(.ui-btn){width:unset}.ui-btn{--ui-size:calc(var(--size-field,.25rem) * 10);--ui-btn-p:1rem;--ui-btn-fg:var(--color-base-content);cursor:pointer;text-align:center;vertical-align:middle;outline-offset:2px;webkit-user-select:none;-webkit-user-select:none;user-select:none;border-width:var(--border);touch-action:manipulation;--ui-btn-bg:var(--ui-btn-color,var(--color-base-200));--ui-btn-border:var(--ui-btn-color,var(--color-base-200));border-start-start-radius:var(--ui-join-ss,var(--radius-field));border-start-end-radius:var(--ui-join-se,var(--radius-field));border-end-end-radius:var(--ui-join-ee,var(--radius-field));border-end-start-radius:var(--ui-join-es,var(--radius-field));flex-wrap:nowrap;flex-shrink:0;justify-content:center;align-items:center;gap:.375rem;font-weight:600;transition-property:color,background-color,border-color,box-shadow,transform;transition-duration:.2s;transition-timing-function:cubic-bezier(0,0,.2,1);display:inline-flex}@supports (color:color-mix(in lab, red, red)){.ui-btn{--ui-btn-border:color-mix(in oklab, var(--ui-btn-color,var(--color-base-200)), #000 calc(var(--depth) * 5%))}}.ui-btn{--ui-btn-soft-bg:initial;--ui-btn-shadow:0 3px 2px -2px var(--ui-btn-bg), 0 4px 3px -2px var(--ui-btn-bg)}@supports (color:color-mix(in lab, red, red)){.ui-btn{--ui-btn-shadow:0 3px 2px -2px color-mix(in oklab, var(--ui-btn-bg) calc(var(--depth) * 30%), #0000), 0 4px 3px -2px color-mix(in oklab, var(--ui-btn-bg) calc(var(--depth) * 30%), #0000)}}.ui-btn{--ui-btn-inset:0 .5px 0 .5px oklch(100% 0 0 / calc(var(--depth) * 6%));height:var(--ui-size);padding-inline:var(--ui-btn-p);font-size:var(--ui-fontsize,.875rem);background-color:var(--ui-btn-bg);color:var(--ui-btn-fg);border-color:var(--ui-btn-border);border-style:var(--ui-btn-border-style,solid);outline-color:var(--ui-btn-color,var(--color-base-content));--tw-prose-links:var(--ui-btn-fg);background-image:none, var(--ui-fx-noise);background-size:auto, calc(var(--noise,0) * 100%);text-shadow:0 .5px oklch(100% 0 0 / calc(var(--depth) * .15));box-shadow:var(--ui-btn-inset) inset, var(--ui-btn-shadow)}.ui-btn:is([type=checkbox],[type=radio]){appearance:none}.ui-btn:is([type=checkbox],[type=radio])[aria-label]:after{--tw-content:attr(aria-label);content:var(--tw-content)}.ui-btn:where(:checked:not(.ui-filter [type=radio].ui-btn)){--ui-btn-color:var(--color-primary);--ui-btn-fg:var(--color-primary-content)}.ui-btn-ghost{--ui-btn-bg:#0000;color:var(--ui-btn-rest-fg,var(--ui-btn-color,var(--color-base-content,currentColor)));--ui-btn-border:#0000;--ui-btn-inset:0 0 0 0 oklch(0% 0 0/0);--ui-btn-shadow:0 0 0 0 oklch(0% 0 0/0);background-image:none}}.prose :where(a.ui-btn:not(.ui-btn-link)):not(:where([class~=not-prose],[class~=not-prose] *)){text-decoration-line:none}@layer daisyui.l1{@media (hover:hover){.ui-btn:hover{--ui-btn-bg:var(--ui-btn-color,var(--color-base-200))}@supports (color:color-mix(in lab, red, red)){.ui-btn:hover{--ui-btn-bg:color-mix(in oklab, var(--ui-btn-color,var(--color-base-200)), #000 7%)}}.ui-btn:hover{color:var(--ui-btn-fg);--ui-btn-border:var(--ui-btn-bg)}@supports (color:color-mix(in lab, red, red)){.ui-btn:hover{--ui-btn-border:color-mix(in oklab, var(--ui-btn-bg), #000 calc(var(--depth) * 5%))}}.ui-btn:hover{--ui-btn-border-style:solid;--ui-btn-inset:0 .5px 0 .5px oklch(100% 0 0 / calc(var(--depth) * 6%));--ui-btn-shadow:0 3px 2px -2px var(--ui-btn-bg), 0 4px 3px -2px var(--ui-btn-bg)}@supports (color:color-mix(in lab, red, red)){.ui-btn:hover{--ui-btn-shadow:0 3px 2px -2px color-mix(in oklab, var(--ui-btn-bg) calc(var(--depth) * 30%), #0000), 0 4px 3px -2px color-mix(in oklab, var(--ui-btn-bg) calc(var(--depth) * 30%), #0000)}}}.ui-btn:active:not(.ui-btn-active,[aria-pressed=true],[aria-checked=true],[aria-current]:not([aria-current=false],[aria-current=\"\"])){--ui-btn-bg:var(--ui-btn-color,var(--color-base-200));translate:0 .5px}@supports (color:color-mix(in lab, red, red)){.ui-btn:active:not(.ui-btn-active,[aria-pressed=true],[aria-checked=true],[aria-current]:not([aria-current=false],[aria-current=\"\"])){--ui-btn-bg:color-mix(in oklab, var(--ui-btn-color,var(--color-base-200)), #000 5%)}}.ui-btn:active:not(.ui-btn-active,[aria-pressed=true],[aria-checked=true],[aria-current]:not([aria-current=false],[aria-current=\"\"])){color:var(--ui-btn-fg,var(--color-base-content));--ui-btn-border:var(--ui-btn-color,var(--color-base-200))}@supports (color:color-mix(in lab, red, red)){.ui-btn:active:not(.ui-btn-active,[aria-pressed=true],[aria-checked=true],[aria-current]:not([aria-current=false],[aria-current=\"\"])){--ui-btn-border:color-mix(in oklab, var(--ui-btn-color,var(--color-base-200)), #000 7%)}}.ui-btn:active:not(.ui-btn-active,[aria-pressed=true],[aria-checked=true],[aria-current]:not([aria-current=false],[aria-current=\"\"])){--ui-btn-border-style:solid;--ui-btn-inset:0 0 0 0 oklch(0% 0 0/0);--ui-btn-shadow:0 0 0 0 oklch(0% 0 0/0)}.ui-btn:where(:checked:not(.ui-filter [type=radio].ui-btn),:not([type=radio],[type=checkbox]):focus-visible){--ui-btn-bg:var(--ui-btn-color,var(--color-base-200));color:var(--ui-btn-fg,var(--color-base-content));--ui-btn-border:var(--ui-btn-bg)}@supports (color:color-mix(in lab, red, red)){.ui-btn:where(:checked:not(.ui-filter [type=radio].ui-btn),:not([type=radio],[type=checkbox]):focus-visible){--ui-btn-border:color-mix(in oklab, var(--ui-btn-bg), #000 calc(var(--depth) * 5%))}}.ui-btn:where(:checked:not(.ui-filter [type=radio].ui-btn),:not([type=radio],[type=checkbox]):focus-visible){--ui-btn-border-style:solid;--ui-btn-inset:0 .5px 0 .5px oklch(100% 0 0 / calc(var(--depth) * 6%));--ui-btn-shadow:0 3px 2px -2px var(--ui-btn-bg), 0 4px 3px -2px var(--ui-btn-bg)}@supports (color:color-mix(in lab, red, red)){.ui-btn:where(:checked:not(.ui-filter [type=radio].ui-btn),:not([type=radio],[type=checkbox]):focus-visible){--ui-btn-shadow:0 3px 2px -2px color-mix(in oklab, var(--ui-btn-bg) calc(var(--depth) * 30%), #0000), 0 4px 3px -2px color-mix(in oklab, var(--ui-btn-bg) calc(var(--depth) * 30%), #0000)}}.ui-btn:where(:checked:not(.ui-filter [type=radio].ui-btn),:not([type=radio],[type=checkbox]):focus-visible){isolation:isolate}.ui-btn:focus-visible,.ui-btn:has(:focus-visible){isolation:isolate;outline-width:2px;outline-style:solid}}@layer daisyui.l1.l2{.ui-btn:is([aria-pressed=true],[aria-checked=true],[aria-current]:not([aria-current=false],[aria-current=\"\"])){--ui-btn-bg:var(--ui-btn-color,var(--color-base-200))}@supports (color:color-mix(in lab, red, red)){.ui-btn:is([aria-pressed=true],[aria-checked=true],[aria-current]:not([aria-current=false],[aria-current=\"\"])){--ui-btn-bg:color-mix(in oklab, var(--ui-btn-color,var(--color-base-200)), #000 5%)}}.ui-btn:is([aria-pressed=true],[aria-checked=true],[aria-current]:not([aria-current=false],[aria-current=\"\"])){color:var(--ui-btn-fg,var(--color-base-content));--ui-btn-border:var(--ui-btn-color,var(--color-base-200))}@supports (color:color-mix(in lab, red, red)){.ui-btn:is([aria-pressed=true],[aria-checked=true],[aria-current]:not([aria-current=false],[aria-current=\"\"])){--ui-btn-border:color-mix(in oklab, var(--ui-btn-color,var(--color-base-200)), #000 7%)}}.ui-btn:is([aria-pressed=true],[aria-checked=true],[aria-current]:not([aria-current=false],[aria-current=\"\"])){--ui-btn-border-style:solid;--ui-btn-inset:0 0 0 0 oklch(0% 0 0/0);--ui-btn-shadow:0 0 0 0 oklch(0% 0 0/0);isolation:isolate}.ui-btn-sm{--ui-fontsize:.75rem;--ui-btn-p:.75rem;--ui-size:calc(var(--size-field,.25rem) * 8)}}@layer daisyui{.ui-btn:is(.ui-btn-disabled,:disabled,[disabled],[aria-disabled=true]){pointer-events:none;color:var(--color-base-content)}@supports (color:color-mix(in lab, red, red)){.ui-btn:is(.ui-btn-disabled,:disabled,[disabled],[aria-disabled=true]){color:color-mix(in oklch, var(--color-base-content) 20%, #0000)}}.ui-btn:is(.ui-btn-disabled,:disabled,[disabled],[aria-disabled=true]){--ui-btn-bg:#0000;--ui-btn-border:#0000;--ui-btn-inset:0 0 0 0 oklch(0% 0 0/0);--ui-btn-shadow:0 0 0 0 oklch(0% 0 0/0);background-image:none}.ui-btn:is(.ui-btn-disabled,:disabled,[disabled],[aria-disabled=true]):not(.ui-btn-link,.ui-btn-ghost){background-color:var(--color-base-content)}@supports (color:color-mix(in lab, red, red)){.ui-btn:is(.ui-btn-disabled,:disabled,[disabled],[aria-disabled=true]):not(.ui-btn-link,.ui-btn-ghost){background-color:color-mix(in oklab, var(--color-base-content) 10%, transparent)}}@media (forced-colors:active){.ui-btn:is(.ui-btn-disabled,:disabled,[disabled],[aria-disabled=true]){color:graytext;border-color:graytext}}}.w{--color-base-100:var(--bg);--color-base-200:var(--surface);--color-base-300:var(--line);--color-base-content:var(--fg);--color-primary:var(--acc);--color-primary-content:var(--bg);--color-secondary:var(--secondary);--color-secondary-content:var(--bg);--radius-field:.75rem;--size-field:.25rem;--border:1px;--depth:0;--noise:0}.w .panel{width:min(var(--console-width,380px),calc(100dvw - 32px));height:min(var(--console-height,620px),calc(100dvh - 96px));border-color:var(--line);isolation:isolate;border-radius:20px;max-height:calc(100dvh - 96px);box-shadow:0 24px 80px #0005,0 4px 12px #0002;container:rc-console/inline-size}.w .panel.open{animation:none}.w .panel{box-sizing:border-box;background-image:radial-gradient(ellipse 420px 180px at top left,var(--acc),transparent)}@supports (color:color-mix(in lab, red, red)){.w .panel{background-image:radial-gradient(ellipse 420px 180px at top left,color-mix(in srgb,var(--acc) 10%,transparent),transparent)}}.w .console-sizebar{flex:none;align-items:center;gap:6px;padding:0 16px 12px;display:flex}.w .console-sizebar .sm{min-height:30px;padding:5px 9px;font-size:11px}.w .console-sizebar .sm[aria-pressed=true]{border-color:var(--acc);color:var(--acc);background:var(--chip)}.console-size-readout{color:var(--mut);font-variant-numeric:tabular-nums;white-space:nowrap;margin-left:auto;font-size:10px}.w .console-size-grip{width:28px;height:24px;min-height:0;color:var(--mut);cursor:nesw-resize;touch-action:none;z-index:2;opacity:0;background:0 0;border:0;border-radius:0 18px 0 8px;padding:5px;transition:opacity .12s;position:absolute;top:0;right:0}.w .console-size-grip svg{pointer-events:none;width:12px;height:12px}.w .console-size-grip:hover,.w .console-size-grip:focus-visible,.w .panel.is-resizing .console-size-grip{opacity:1}.w .console-size-grip:hover,.w .console-size-grip:focus-visible{color:var(--acc);background:var(--chip)}.w .console-size-grip:focus-visible{outline-offset:-3px}.w .panel.is-resizing{-webkit-user-select:none;user-select:none;cursor:nesw-resize;animation:none}.console-size-help{clip-path:inset(50%);width:1px;height:1px;position:absolute;overflow:hidden}.w .hd{background:0 0;flex:none;gap:12px;padding:18px 18px 14px}.w .hd b{letter-spacing:-.6px;font-size:19px;font-weight:700}.w .hd small{border:1px solid var(--line);vertical-align:middle;border-radius:6px;padding:3px 6px;font-size:10px}.w .x{width:32px;height:32px;color:var(--mut);flex:none;place-items:center;padding:0;display:grid}.w .tabs{border:1px solid var(--line);background:var(--surface);scrollbar-width:thin;scroll-snap-type:inline proximity;border-radius:15px;flex:none;gap:3px;margin:0 18px;padding:5px;overflow-x:auto}.w .tab{scroll-snap-align:start;border-radius:10px;flex:1 0 auto;justify-content:center;align-items:center;gap:6px;min-width:76px;height:42px;padding:8px 9px;font-size:12px;font-weight:600;transition:color .16s,background-color .16s;display:flex;position:relative}.w .tab svg{flex:none;width:16px;height:16px}.w .tab.act{box-shadow:none}.w .tab[aria-selected=true]{background:var(--bg);color:var(--acc)}.w .tab[aria-selected=true]:after{content:\"\";border-bottom:2px solid;border-radius:2px;position:absolute;bottom:3px;left:32%;right:32%}.w .body{min-height:0;padding:18px 16px;scroll-padding:16px}.console-intro{margin-bottom:16px}.console-intro h3{letter-spacing:-.4px;color:var(--fg);margin:0 0 6px;font-size:19px}.console-intro p{color:var(--mut);max-width:34ch;margin:0;font-size:12px;line-height:1.6}.w h4{letter-spacing:.09em;color:var(--secondary);margin-bottom:11px;font-size:10px;font-weight:700}.w .presets{grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;margin-bottom:12px;display:grid}.w .pre{background:var(--surface);justify-content:center;min-height:36px;padding:9px 7px;font-size:11px}.w .sw{flex:none;width:18px}.w .sec[data-sec=theme] .col{background:var(--surface);border-radius:12px;min-height:58px;font-size:11px}.w .fld{min-height:36px;margin:10px 0;line-height:1.5}.w .fld input[type=text],.w .fld select{background:var(--surface);border-radius:10px;width:160px;min-height:36px}.w .fld input[type=range]{width:145px}.w .sm.ui-btn{height:auto;min-height:34px;box-shadow:none;background:var(--surface);border:1px solid var(--line);color:var(--fg);padding:8px 10px;font-size:11px;font-weight:600}.w .sm.ui-btn:hover{background:var(--chip);border-color:var(--acc)}.w .tg{border:1px solid var(--line);background:var(--surface);border-radius:13px;gap:16px;margin-bottom:8px;padding:14px 12px;line-height:1.5;position:relative}.w .tg:last-of-type{border-bottom:1px solid var(--line)}.w .tg.sub{background:0 0;margin-left:12px;padding-left:12px}.w .tg b{font-size:12px;font-weight:600}.w .tg span{margin-top:3px;font-size:11px}.w .tg input{opacity:0;clip-path:inset(50%);width:1px;height:1px;display:block;position:absolute}.w .tg:has(input:focus-visible){outline:2px solid var(--acc);outline-offset:3px}.w .tg.off{opacity:.5}.w .tg[data-tg=sourceFirst]{border-color:var(--acc)}@supports (color:color-mix(in lab, red, red)){.w .tg[data-tg=sourceFirst]{border-color:color-mix(in srgb,var(--acc) 45%,var(--line))}}.w .tg[data-tg=sourceFirst]{background:var(--acc)}@supports (color:color-mix(in lab, red, red)){.w .tg[data-tg=sourceFirst]{background:color-mix(in srgb,var(--acc) 7%,var(--bg))}}.w .sl{border-radius:20px;width:38px;height:22px}.w .sl:after{width:18px;height:18px}.w .tg input:checked+.sl:after{transform:translate(16px)}.w .ft{background:var(--surface);flex:none;gap:6px;padding:14px 20px;font-size:10px}.w .stat{border:1px solid var(--line);background:var(--surface);padding:12px;line-height:1.6}.w .mt{margin-top:22px}.w .row2{gap:8px}.w .row2+.tg{margin-top:12px}.w .sm.wide{margin-top:12px;display:flex}.w :is(button,input,select,a):focus-visible{outline:2px solid var(--acc);outline-offset:3px}.w .pill{background:var(--surface);color:var(--fg);border:1px solid var(--line);box-shadow:0 4px 16px #0002}.w .pill.on{background:var(--acc);color:var(--bg);border-color:#0000}.w .pill.busy{background:var(--secondary);color:var(--bg);border-color:#0000}.w .dot{background:currentColor}.w .pill.busy .dot{animation:none}.w .btn{transition:background-color .16s,color .16s}.w .btn:active{transform:none}@media (prefers-reduced-motion:no-preference){.w .panel.open{animation:.2s cubic-bezier(.2,.8,.2,1) console-open}.w .sec.act{animation:.16s ease-out console-section}.w .pill.busy .dot{animation:1.2s 3 pulse}}@keyframes console-open{0%{opacity:0;transform:translateY(10px)scale(.985)}to{opacity:1;transform:none}}.w .panel.is-resizing{animation:none}@keyframes console-section{0%{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}@media (prefers-reduced-motion:reduce){.w .sl:after{transition:none}}@container rc-console (max-width:360px){.w .hd{padding:18px 16px}.w .tabs{margin:0 10px}.w .tab{flex-direction:column;flex:1 0 64px;gap:3px;min-width:64px;height:52px;padding:6px 4px;font-size:11px}.w .body{padding:18px 12px}.w .ft{padding:12px}.w .fld input[type=text],.w .fld select{width:140px}.w .fld input[type=range]{width:110px}}@keyframes pulse{50%{opacity:.5}}";
         const host = document.createElement('div');
         host.id = 'rc-kit';
         host.style.cssText = 'position:fixed;left:0;bottom:0;z-index:2147483647;';
@@ -990,12 +1037,12 @@ kbd{background:var(--chip);border:1px solid var(--line);border-radius:5px;paddin
   <div class="panel" id="panel">
     <div class="hd"><div><b>🎨 Ultimate RC</b><small>v2.0.0</small></div><button class="x" id="rk-close" title="Đóng (Esc)">✕</button></div>
     <div class="tabs"><button class="tab" data-tab="theme">Giao diện</button><button class="tab" data-tab="feat">Tính năng</button><button class="tab" data-tab="ocr">OCR</button><button class="tab" data-tab="music">Nhạc</button></div>
-    <div class="body"><div class="sec" data-sec="music">
+    <div class="body"><div class="sec" hidden data-sec="music">
     <h4>YouTube / Spotify</h4><input id="rc-music-url" type="url" placeholder="Dán link bài hát / playlist" style="box-sizing:border-box;width:100%;padding:9px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--fg)">
     <div class="row2 mt"><button class="sm fl" id="rc-music-load">Mở trình phát</button><button class="sm" id="rc-music-stop">Dừng</button></div>
     <div class="stat" id="rc-music-status">Không tự phát khi tải trang. Spotify có thể chỉ phát bản nghe thử; một số video không cho nhúng.</div>
     <a id="rc-music-external" target="_blank" rel="noopener noreferrer" hidden>Mở trên dịch vụ gốc ↗</a></div>
-      <div class="sec" data-sec="theme">
+      <div class="sec" hidden data-sec="theme">
         <h4>Bộ màu nhanh</h4>
         <div class="presets">${PRESETS.map((p, i) => `<button class="pre" data-pre="${i}"><span class="sw">${['primary', 'userBubble', 'botBubble', 'pageBg'].map(k => `<i data-c="${p.c[k]}"></i>`).join('')}</span>${p.n}</button>`).join('')}</div>
         <div class="row2" style="margin-bottom:16px"><button class="sm fl" id="theme-export">Xuất theme</button><button class="sm fl" id="theme-import">Nhập theme</button></div>
@@ -1017,7 +1064,7 @@ kbd{background:var(--chip);border:1px solid var(--line);border-radius:5px;paddin
         <button class="sm fl wide" id="rk-pal">Lấy màu từ ảnh nền ngay</button>
         <input type="file" id="file" accept="image/*,video/mp4,video/webm,.gif,.webp,.mp4,.webm" hidden>
       </div>
-      <div class="sec" data-sec="feat">
+      <div class="sec" hidden data-sec="feat">
         <h4>Chặn của trang</h4>
         ${TOGGLES.filter(t => ['antiPaste', 'antiCopy'].includes(t[0])).map(tgHtml).join('')}
         <h4 class="mt">Chat</h4>
@@ -1027,7 +1074,7 @@ kbd{background:var(--chip);border:1px solid var(--line);border-radius:5px;paddin
         <h4 class="mt">Giao diện</h4>
         ${TOGGLES.filter(t => ['siteWide'].includes(t[0])).map(tgHtml).join('')}
       </div>
-      <div class="sec" data-sec="ocr">
+      <div class="sec" hidden data-sec="ocr">
         ${TOGGLES.filter(t => OCR_KEYS.includes(t[0])).map(tgHtml).join('')}
         <h4 class="mt">Động cơ OCR</h4>
         <div class="fld"><span>Ngôn ngữ đọc</span><span class="inl"><label class="chk"><input type="checkbox" data-k="ocrVie" ${cfg.ocrVie !== false ? 'checked' : ''}>Tiếng Việt</label><label class="chk"><input type="checkbox" data-k="ocrEng" ${cfg.ocrEng !== false ? 'checked' : ''}>English</label></span></div>
@@ -1047,10 +1094,10 @@ kbd{background:var(--chip);border:1px solid var(--line);border-radius:5px;paddin
 </div>`;
         // CSP của EduNext chặn <style> inline → dùng constructable stylesheet (không bị CSP style-src chặn)
         try {
-            const sheet = new CSSStyleSheet(); sheet.replaceSync(KIT_CSS);
+            const sheet = new CSSStyleSheet(); sheet.replaceSync(KIT_CSS + CONSOLE_CSS);
             root.adoptedStyleSheets = [sheet];
         } catch (e) {
-            const st = document.createElement('style'); st.textContent = KIT_CSS; root.prepend(st);
+            const st = document.createElement('style'); st.textContent = KIT_CSS + CONSOLE_CSS; root.prepend(st);
         }
         document.body.appendChild(host);
         applyDashboardTheme();
@@ -1059,15 +1106,16 @@ kbd{background:var(--chip);border:1px solid var(--line);border-radius:5px;paddin
         const panel = $('#panel'), pill = $('#pill'), stat = $('#stat');
         // Theme files intentionally exclude OCR, clipboard and other behavior settings.
         const themeKeys = ['primary','userBubble','botBubble','chatBg','msgBg','panelBg','pageBg','fontSize','fontFamily','bgImage','bgBlur','autoTheme','glass','glassBlur','glassAlpha','siteWide'];
-        const colors = [...themeKeys.slice(0,7), 'dashboardBg'];
-        themeKeys.push('dashboardBg', 'imageThemeMode');
-        const ranges = {fontSize:[12,22],bgBlur:[0,20],glassBlur:[0,30],glassAlpha:[15,90]};
+        const colors = [...themeKeys.slice(0,7), 'dashboardBg', 'consolePrimary', 'consoleSecondary'];
+        themeKeys.push('dashboardBg', 'imageThemeMode', 'consolePrimary', 'consoleSecondary', 'consoleWidth', 'consoleHeight');
+        const ranges = {fontSize:[12,22],bgBlur:[0,20],glassBlur:[0,30],glassAlpha:[15,90],consoleWidth:[320,560],consoleHeight:[420,820]};
         const dataMedia = /^data:(?:image\/(?:png|jpeg|gif|webp|avif)|video\/(?:mp4|webm));base64,[A-Za-z0-9+/]*={0,2}$/;
         const validateTheme = doc => {
             if(!doc || doc.format !== 'ultimate-rc-theme' || doc.version !== 1 || !doc.theme || typeof doc.theme !== 'object' || Array.isArray(doc.theme)) throw Error('File theme không đúng định dạng hoặc phiên bản.');
             if(Object.keys(doc).some(k=>!['format','version','theme','video'].includes(k)))throw Error('File có trường không hợp lệ.');
             // Older portable themes do not contain the dashboard color.
             const t={dashboardBg:cfg.dashboardBg || DEFAULTS.dashboardBg, imageThemeMode:cfg.imageThemeMode || 'dark'};
+            for (const key of ['consolePrimary','consoleSecondary','consoleWidth','consoleHeight']) t[key] = cfg[key] ?? DEFAULTS[key];
             for(const [k,v] of Object.entries(doc.theme)) {
                 if(!themeKeys.includes(k))throw Error('Thuộc tính không hợp lệ: '+k);
                 let ok;
@@ -1195,7 +1243,7 @@ kbd{background:var(--chip);border:1px solid var(--line);border-radius:5px;paddin
                 const mount=document.createElement('div');musicFrame=mount;musicBox.insertBefore(mount,musicBar);
                 if(link.name==='YouTube'){
                     const embed=new URL(link.src);controller=new api.Player(mount,{width:'100%',height:220,videoId:embed.pathname.split('/').pop()==='videoseries'?undefined:embed.pathname.split('/').pop(),playerVars:{playsinline:1,origin:location.origin,...(embed.searchParams.get('list')?{listType:'playlist',list:embed.searchParams.get('list')}:{})},events:{
-                        onReady:e=>{if(token!==generation){e.target.destroy();return;}controller=e.target;musicFrame=controller.getIframe();musicFrame.title='YouTube player';play.disabled=false;showPlayer(true);controller.playVideo();musicStatus.textContent='Đã yêu cầu phát. Ẩn video vẫn tiếp tục phát nhạc.';poll=setInterval(()=>{if(token!==generation)return;const d=controller.getVideoData();musicName.textContent=d?.title||'YouTube';musicName.title=musicName.textContent;update(controller.getCurrentTime(),controller.getDuration(),controller.getPlayerState()!==1);},500);},
+                        onReady:e=>{if(token!==generation){e.target.destroy();return;}controller=e.target;musicFrame=controller.getIframe();musicFrame.title='YouTube player';play.disabled=false;showPlayer(false);controller.playVideo();musicStatus.textContent='Đã yêu cầu phát. Ẩn video vẫn tiếp tục phát nhạc.';poll=setInterval(()=>{if(token!==generation)return;const d=controller.getVideoData();musicName.textContent=d?.title||'YouTube';musicName.title=musicName.textContent;update(controller.getCurrentTime(),controller.getDuration(),controller.getPlayerState()!==1);},500);},
                         onStateChange:e=>{if(token!==generation)return;update(controller.getCurrentTime(),controller.getDuration(),e.data!==1);},
                         onAutoplayBlocked:()=>{if(token===generation)musicStatus.textContent='Trình duyệt chặn tự phát. Bấm nút Play để nghe.';},onError:()=>{if(token===generation)musicStatus.textContent='YouTube không phát được video này. Dùng link dịch vụ gốc bên dưới.';}
                     }});
@@ -1210,13 +1258,165 @@ kbd{background:var(--chip);border:1px solid var(--line);border-radius:5px;paddin
         });
         musicInput.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();$('#rc-music-load').click();}});
 
-        const setTab = t => {
-            cfg.uiTab = t; save();
-            $$('.tab').forEach(b => b.classList.toggle('act', b.dataset.tab === t));
-            $$('.sec').forEach(s => s.classList.toggle('act', s.dataset.sec === t));
+        const tabInfo = {
+            theme: ['Giao diện', 'Không gian của bạn', 'Chọn màu sắc và kiểu hiển thị theo cách bạn thích.', '<rect x="3" y="3" width="18" height="18" rx="4"/><path d="M3 10h18M10 10v11"/>'],
+            feat: ['Tiện ích', 'Thao tác thuận tiện hơn', 'Tuỳ chỉnh nhập liệu, sao chép và cách gửi câu trả lời.', '<path d="m13 3-9 11h7l-1 7 10-12h-7z"/>'],
+            ocr: ['Văn bản', 'Đọc rõ, sao chép dễ', 'Ưu tiên chữ gốc. OCR hỗ trợ khi tin nhắn chỉ có ảnh.', '<path d="M5 4h14M12 4v16M8 20h8"/>'],
+            music: ['Nhạc', 'Một chút tập trung', 'Mở nhạc bạn thích và tiếp tục học theo nhịp của mình.', '<path d="M9 18V5l12-2v13M9 9l12-2"/><ellipse cx="6" cy="18" rx="3" ry="3"/><ellipse cx="18" cy="16" rx="3" ry="3"/>']
         };
-        setTab(['feat', 'ocr', 'music'].includes(cfg.uiTab) ? cfg.uiTab : 'theme');
-        $$('.tab').forEach(b => b.addEventListener('click', () => setTab(b.dataset.tab)));
+        const tablist = $('.tabs'), tabButtons = $$('.tab'), tabScroll = new Map();
+        let currentTab = null;
+        tablist.setAttribute('role', 'tablist');
+        tablist.setAttribute('aria-label', 'Cài đặt Ultimate RC');
+        tablist.setAttribute('focusgroup', 'tablist nomemory');
+        for (const b of tabButtons) {
+            const [label,,,path] = tabInfo[b.dataset.tab];
+            b.type = 'button'; b.id = 'rc-tab-' + b.dataset.tab;
+            b.setAttribute('role', 'tab');
+            b.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + path + '</svg><span></span>';
+            b.querySelector('span').textContent = label;
+        }
+        for (const s of $$('.sec')) {
+            s.setAttribute('role', 'tabpanel'); s.setAttribute('aria-labelledby', 'rc-tab-' + s.dataset.sec);
+            const intro = document.createElement('div'); intro.className = 'console-intro';
+            const title = document.createElement('h3'), desc = document.createElement('p');
+            title.textContent = tabInfo[s.dataset.sec][1]; desc.textContent = tabInfo[s.dataset.sec][2];
+            intro.append(title, desc); s.prepend(intro);
+        }
+        // Size controls stay outside the scrolling tab content.
+        const sizeBar = document.createElement('div'); sizeBar.className = 'console-sizebar';
+        sizeBar.setAttribute('role', 'group'); sizeBar.setAttribute('aria-label', 'Kích thước bảng');
+        const sizePresets = [['Gọn', 320, 520], ['Mặc định', 380, 620], ['Rộng', 560, 820]];
+        const sizeButtons = sizePresets.map(([label, width, height], index) => {
+            const button = document.createElement('button'); button.type = 'button';
+            button.className = 'sm ui-btn ui-btn-sm'; button.textContent = label;
+            button.dataset.sizePreset = index;
+            if (index === 1) button.id = 'rc-size-reset';
+            button.addEventListener('click', () => { setConsoleSize(width, height); save(); });
+            sizeBar.append(button); return button;
+        });
+        const sizeReadout = document.createElement('span'); sizeReadout.className = 'console-size-readout';
+        sizeBar.append(sizeReadout); $('.hd').after(sizeBar);
+        const grip = document.createElement('button'); grip.type = 'button'; grip.id = 'rc-size-grip';
+        grip.className = 'ui-btn ui-btn-ghost console-size-grip';
+        grip.setAttribute('aria-label', 'Đổi kích thước bảng');
+        grip.setAttribute('aria-describedby', 'rc-size-help');
+        grip.title = 'Kéo để đổi kích thước · Nhấp đúp để đặt lại';
+        grip.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M8 4h12v12M20 4 5 19"/></svg>';
+        const sizeHelp = document.createElement('span'); sizeHelp.id = 'rc-size-help'; sizeHelp.className = 'console-size-help';
+        sizeHelp.textContent = 'Kéo góc trên bên phải. Dùng phím mũi tên; Shift để đổi nhanh. Escape để hủy.';
+        panel.append(grip, sizeHelp);
+        let sizeDrag = null, sizeFrame = 0;
+        const sizeLimits = () => ({width: Math.min(560, innerWidth - 32), height: Math.min(820, innerHeight - 96)});
+        const setConsoleSize = (width, height) => {
+            cfg.consoleWidth = Math.max(320, Math.min(560, Math.round(width)));
+            cfg.consoleHeight = Math.max(420, Math.min(820, Math.round(height)));
+            // Only update panel geometry while dragging; do not re-theme the page.
+            $('.w').style.setProperty('--console-width', cfg.consoleWidth + 'px');
+            $('.w').style.setProperty('--console-height', cfg.consoleHeight + 'px');
+            sizeButtons.forEach((button, i) => button.setAttribute('aria-pressed', String(
+                cfg.consoleWidth === sizePresets[i][1] && cfg.consoleHeight === sizePresets[i][2])));
+        };
+        const syncSizeReadout = () => {
+            if (!panel.classList.contains('open')) return;
+            sizeReadout.textContent = panel.offsetWidth + ' × ' + panel.offsetHeight;
+            sizeButtons.forEach((button, i) => button.setAttribute('aria-pressed', String(
+                cfg.consoleWidth === sizePresets[i][1] && cfg.consoleHeight === sizePresets[i][2])));
+        };
+        new ResizeObserver(syncSizeReadout).observe(panel);
+        const paintSizeDrag = () => {
+            sizeFrame = 0; if (!sizeDrag || !sizeDrag.moved) return;
+            const limits = sizeLimits();
+            setConsoleSize(Math.min(limits.width, sizeDrag.width + sizeDrag.x - sizeDrag.startX),
+                Math.min(limits.height, sizeDrag.height + sizeDrag.startY - sizeDrag.y));
+        };
+        const finishSizeDrag = cancel => {
+            if (!sizeDrag) return;
+            cancelAnimationFrame(sizeFrame); sizeFrame = 0;
+            if (cancel) setConsoleSize(sizeDrag.savedWidth, sizeDrag.savedHeight);
+            else if (sizeDrag.moved) { paintSizeDrag(); save(); }
+            const pointerId = sizeDrag.pointerId; sizeDrag = null;
+            panel.classList.remove('is-resizing');
+            if (grip.hasPointerCapture(pointerId)) grip.releasePointerCapture(pointerId);
+        };
+        grip.addEventListener('pointerdown', e => {
+            if (e.button !== 0 || !e.isPrimary || sizeDrag) return;
+            e.preventDefault(); grip.focus({preventScroll: true});
+            const rect = {width:panel.offsetWidth, height:panel.offsetHeight};
+            sizeDrag = {pointerId:e.pointerId, startX:e.clientX, startY:e.clientY, x:e.clientX, y:e.clientY,
+                width:rect.width, height:rect.height, savedWidth:cfg.consoleWidth, savedHeight:cfg.consoleHeight};
+            grip.setPointerCapture(e.pointerId); panel.classList.add('is-resizing');
+        });
+        grip.addEventListener('pointermove', e => {
+            if (!sizeDrag || e.pointerId !== sizeDrag.pointerId) return;
+            sizeDrag.x = e.clientX; sizeDrag.y = e.clientY;
+            sizeDrag.moved ||= Math.hypot(e.clientX - sizeDrag.startX, e.clientY - sizeDrag.startY) >= 3;
+            if (!sizeFrame) sizeFrame = requestAnimationFrame(paintSizeDrag);
+        });
+        grip.addEventListener('pointerup', e => {
+            if (!sizeDrag || e.pointerId !== sizeDrag.pointerId) return;
+            sizeDrag.x = e.clientX; sizeDrag.y = e.clientY; finishSizeDrag(false);
+        });
+        grip.addEventListener('pointercancel', () => finishSizeDrag(true));
+        grip.addEventListener('lostpointercapture', () => finishSizeDrag(true));
+        window.addEventListener('blur', () => finishSizeDrag(true));
+        window.addEventListener('resize', () => finishSizeDrag(true));
+        // Register before the panel's Escape-to-close listener.
+        window.addEventListener('keydown', e => {
+            if (e.key === 'Escape' && sizeDrag) { e.preventDefault(); e.stopImmediatePropagation(); finishSizeDrag(true); }
+        }, true);
+        grip.addEventListener('dblclick', () => { setConsoleSize(380, 620); save(); });
+        grip.addEventListener('keydown', e => {
+            if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home'].includes(e.key)) return;
+            e.preventDefault();
+            if (e.key === 'Home') { setConsoleSize(380, 620); save(); return; }
+            const limits = sizeLimits(), step = e.shiftKey ? 40 : 10;
+            const horizontal = e.key === 'ArrowLeft' || e.key === 'ArrowRight';
+            setConsoleSize(horizontal ? Math.min(limits.width, panel.offsetWidth + (e.key === 'ArrowRight' ? step : -step)) : cfg.consoleWidth,
+                horizontal ? cfg.consoleHeight : Math.min(limits.height, panel.offsetHeight + (e.key === 'ArrowUp' ? step : -step)));
+            save();
+        });
+        applyDashboardTheme();
+
+        $$('.sm').forEach(b => b.classList.add('ui-btn', 'ui-btn-sm'));
+        $('.x').classList.add('ui-btn', 'ui-btn-ghost');
+        $('.hd b').textContent = 'Ultimate RC';
+        // The preferred route leads the text settings; preserve all input bindings.
+        const sourceToggle = $('[data-tg="sourceFirst"]');
+        if (sourceToggle) $('.sec[data-sec="ocr"] .console-intro').after(sourceToggle);
+        const revealSelectedTab = () => {
+            const selected = tabButtons.find(b => b.dataset.tab === currentTab);
+            if (!selected || !panel.classList.contains('open')) return;
+            const item = selected.getBoundingClientRect(), strip = tablist.getBoundingClientRect();
+            // Scroll only our tab strip, including on Chrome before scrollIntoView's container option.
+            if (item.left < strip.left + 5) tablist.scrollLeft -= strip.left + 5 - item.left;
+            else if (item.right > strip.right - 5) tablist.scrollLeft += item.right - strip.right + 5;
+        };
+        new ResizeObserver(revealSelectedTab).observe(tablist);
+        const setTab = t => {
+            if (!tabInfo[t]) t = 'theme';
+            const body = $('.body');
+            if (currentTab) tabScroll.set(currentTab, body.scrollTop);
+            currentTab = t; cfg.uiTab = t; save();
+            for (const b of tabButtons) {
+                const active = b.dataset.tab === t;
+                b.classList.toggle('act', active); b.setAttribute('aria-selected', String(active));
+                b.tabIndex = active ? 0 : -1; b.toggleAttribute('focusgroupstart', active);
+            }
+            for (const s of $$('.sec')) { const active = s.dataset.sec === t; s.classList.toggle('act', active); s.hidden = !active; }
+            body.scrollTop = tabScroll.get(t) || 0;
+            revealSelectedTab();
+        };
+        setTab(cfg.uiTab);
+        tabButtons.forEach(b => b.addEventListener('click', () => setTab(b.dataset.tab)));
+        // Manual activation avoids saving settings just by moving keyboard focus.
+        tablist.addEventListener('keydown', e => {
+            const index = tabButtons.indexOf(e.target); if (index < 0) return;
+            const next = e.key === 'Home' ? 0 : e.key === 'End' ? tabButtons.length - 1 : e.key === 'ArrowRight' ? (index + 1) % tabButtons.length : e.key === 'ArrowLeft' ? (index + tabButtons.length - 1) % tabButtons.length : -1;
+            if (next < 0) return;
+            e.preventDefault(); tabButtons[next].focus();
+        });
+
 
         root.addEventListener('input', e => {
             const t = e.target, k = t.dataset && t.dataset.k;
@@ -1225,10 +1425,12 @@ kbd{background:var(--chip);border:1px solid var(--line);border-radius:5px;paddin
             else if (t.type === 'range') cfg[k] = +t.value;
             else if (t.tagName === 'SELECT' && /^\d+$/.test(t.value)) cfg[k] = +t.value;
             else cfg[k] = t.value;
+            if (k === 'sourceFirst' && cfg.sourceFirst) cfg.wip = false;
+            if (k === 'wip' && cfg.wip) cfg.sourceFirst = false;
             if ((k === 'ocrVie' || k === 'ocrEng') && !cfg.ocrVie && !cfg.ocrEng) { cfg.ocrVie = true; t.checked = true; if (k === 'ocrVie') { /* giữ lại tick */ } toast('Phải chọn ít nhất 1 ngôn ngữ'); }
             if (k === 'fontSize') $('#fsv').textContent = cfg.fontSize + 'px';
             save(); applyTheme(); try { render(); } catch (_) {}
-            if (k === 'wip' && cfg.wip) forceScan();
+            if ((k === 'wip' && cfg.wip) || (k === 'sourceFirst' && cfg.sourceFirst)) { reapplyAll(); forceScan(); }
             if (k === 'glass' && cfg.glass && !cfg.bgImage) toast('⚠ Kiểu kính mờ cần có ảnh nền — hãy dán link hoặc tải ảnh lên');
             if (k === 'qBox' && cfg.replaceBubble) { restoreBubbles(); reapplyAll(); }
             if (k === 'replaceBubble') { if (cfg.replaceBubble) reapplyAll(); else restoreBubbles(); }
@@ -1271,7 +1473,13 @@ kbd{background:var(--chip);border:1px solid var(--line);border-radius:5px;paddin
             rd.readAsDataURL(f);
         });
 
-        const togglePanel = on => { panel.classList.toggle('open', on === undefined ? !panel.classList.contains('open') : on); };
+        const togglePanel = on => {
+            const open = on === undefined ? !panel.classList.contains('open') : on;
+            panel.classList.toggle('open', open); $('#gear').setAttribute('aria-expanded', String(open));
+            if (open) tabButtons.find(b => b.dataset.tab === currentTab)?.focus({preventScroll:true});
+            else $('#gear').focus({preventScroll:true});
+        };
+        $('#gear').setAttribute('aria-expanded', 'false');
         $('#gear')?.addEventListener('click', () => togglePanel());
         $('#rk-close')?.addEventListener('click', () => togglePanel(false));
         window.addEventListener('keydown', e => {
@@ -1283,16 +1491,17 @@ kbd{background:var(--chip);border:1px solid var(--line);border-radius:5px;paddin
         const render = () => {
           try {
             const working = busy || queue.length > 0;
-            pill.className = 'btn pill' + (working ? ' busy' : cfg.wip ? ' on' : '');
-            $('#pt').textContent = working ? 'OCR…' : 'OCR';
-            pill.title = cfg.wip ? 'Tự quét ảnh: BẬT · click để tắt · chuột phải: quét ép tin mới nhất' : 'Tự quét ảnh: tắt · click để bật';
+            pill.className = 'btn pill' + (working ? ' busy' : (cfg.wip || cfg.sourceFirst) ? ' on' : '');
+            $('#pt').textContent = working ? 'Đang đọc…' : cfg.sourceFirst ? 'Chữ gốc' : 'OCR';
+            pill.title = cfg.sourceFirst ? 'Ưu tiên văn bản gốc · OCR dự phòng · click để tắt' : cfg.wip ? 'Tự quét ảnh: BẬT · click để tắt · chuột phải: quét ép tin mới nhất' : 'Tự quét ảnh: tắt · click để bật';
             const hubTxt = hubAlive() ? 'OCR nền: ' + GM_getValue('rc_ocr_hub_info', '') : 'OCR nền sẵn sàng · không mở tab phụ';
             stat.textContent = (working ? '🔎 Đang quét ' + queue.length + ' ảnh… · ' : '') + hubTxt + (working ? '' : ' · Gần nhất: ' + lastPreview + (lastPreview.length >= 120 ? '…' : ''));
-            $$('.tg.sub').forEach(t => t.classList.toggle('off', !cfg.wip));
+            $$('.tg.sub').forEach(t => t.classList.toggle('off', !(cfg.wip || cfg.sourceFirst)));
+            for (const k of ['sourceFirst', 'wip']) { const cb = $('input[data-k="' + k + '"]'); if (cb) cb.checked = !!cfg[k]; }
           } catch (e) { log('⚠ render UI lỗi:', e); try { stat.textContent = '⚠ ' + (e && e.message || e); } catch (_) {} }
         };
         pill.addEventListener('click', () => {
-            cfg.wip = !cfg.wip; save(); render();
+            if (cfg.sourceFirst) { cfg.sourceFirst = false; cfg.wip = false; } else cfg.wip = !cfg.wip; save(); render();
             const cb = $('input[data-k="wip"]'); if (cb) cb.checked = cfg.wip;
             toast(cfg.wip ? '🔎 OCR bật: tự quét ảnh mới' : '🔎 OCR tắt');
             if (cfg.wip) forceScan();
@@ -1406,6 +1615,7 @@ kbd{background:var(--chip);border:1px solid var(--line);border-radius:5px;paddin
 })();
 
     whenBody(initUI);
+    whenBody(() => setTimeout(reapplyAll, 0));
 
     log('Ultimate RC tools v2.0.0 sẵn sàng');
 })();

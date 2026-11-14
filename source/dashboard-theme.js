@@ -5,7 +5,11 @@
         const [h, s, l] = rgb2hsl(...hexToRgb(seed));
         const light = cfg.imageThemeMode === 'light';
         const bg = hsl2hex(h, Math.min(s, 0.45), light ? Math.max(0.90, Math.min(l, 0.97)) : Math.max(0.07, Math.min(l, 0.18)));
-        const accent = hsl2hex(h, Math.min(s, 0.75), light ? 0.36 : 0.72);
+        const accentColor = value => {
+            const [hue, sat] = rgb2hsl(...hexToRgb(value));
+            return hsl2hex(hue, Math.max(.5, Math.min(sat, .85)), light ? .38 : .76);
+        };
+        const accent = accentColor(cfg.consolePrimary || '#78a6ff');
         const fg = light ? '#172033' : '#f1f5f9';
         const values = {
             '--bg': bg,
@@ -14,6 +18,8 @@
             '--line': mix(bg, fg, 0.22),
             '--chip': mix(bg, fg, 0.10),
             '--acc': accent,
+            '--secondary': accentColor(cfg.consoleSecondary || '#b6a0ff'),
+            '--surface': mix(bg, fg, 0.035),
             '--switch-off': mix(bg, accent, 0.22),
             '--switch-knob': fg,
             '--switch-on-knob': bg,
@@ -21,6 +27,17 @@
         };
         for (const [key, value] of Object.entries(values)) wrapper.style.setProperty(key, value);
         wrapper.style.colorScheme = light ? 'light' : 'dark';
+        for (const [key, min, max, fallback, variable] of [
+            ['consoleWidth', 320, 560, 380, '--console-width'],
+            ['consoleHeight', 420, 820, 620, '--console-height']
+        ]) {
+            const value = Number.isFinite(cfg[key]) ? Math.max(min, Math.min(max, cfg[key])) : fallback;
+            wrapper.style.setProperty(variable, value + 'px');
+            const input = wrapper.querySelector('[data-k="' + key + '"]');
+            if (input) { input.value = value; input.style.setProperty('--fill', 100 * (value-min)/(max-min) + '%'); }
+            const output = wrapper.querySelector('[data-size-output="' + key + '"]');
+            if (output) output.textContent = value + ' px';
+        }
     }
 
     function imagePaletteMode(palette, mode) {

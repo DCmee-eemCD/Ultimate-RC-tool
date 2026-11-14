@@ -1,6 +1,6 @@
 # Ultimate RC Tool — developer handoff
 
-Last source/documentation review: 2026-11-13. Read RULES.md before editing.
+Last source/documentation review: 2026-11-14. Read RULES.md before editing.
 This review does not certify a new release or authenticated live behavior.
 
 ## Purpose and environment
@@ -45,7 +45,9 @@ minimized. Live service playback has not been verified.
 Further UI changes included in the 2.0.0 source and generated app:
 dashboard color and theme-aware controls, dark/light image palettes, updated
 color swatches, removal of decorative button emoji, gray unplayed music track,
-and SVG left-navigation replacements. No new ZIP was built during this review.
+SVG left-navigation replacements, source-first routing, console resize presets
+and a hover-revealed grip. The header subtitle is removed and music opens with
+the embed collapsed. No new ZIP was built during this review.
 The gray music track is an unplayed seek track, not measured buffered progress.
 
 ## File map and build ownership
@@ -58,7 +60,13 @@ The gray music track is an unplayed seek track, not measured buffered progress.
 | source/theme-transfer.js | Theme import/export UI logic |
 | source/dashboard-theme.js | Dashboard CSS variables and dark/light image-palette normalization |
 | source/nav-icons.js | React-safe left-navigation SVG replacements and alignment |
-| source/text-source.js | Bounded React prop search for original text/Unicode/LaTeX |
+| source/text-source.js | Exact canvas-to-message React source recovery |
+| source/source-first.mjs | Default source-first mode, settings and OCR fallback build integration |
+| source/console-ui.js; source/console-ui.mjs | Settings tabs, accessibility and console build integration |
+| source/console-size.js | Persistent presets, drag/keyboard resizing and cancellation |
+| source/console.css | Tailwind/daisyUI input and scoped panel styling |
+| extension/console.css | GENERATED CSS, also embedded in app.js |
+| package.json; package-lock.json | Locked CSS build dependencies and npm build command |
 | source/music.js | Floating music UI and official YouTube/Spotify SDK adapters |
 | source/ocr-toolbar.mjs | Generated OCR result toolbar transformations |
 | source/ocr-fidelity.js | Historical image-preservation experiment; NOT called by current OCR core |
@@ -77,10 +85,13 @@ The gray music track is an unplayed seek track, not measured buffered progress.
 | tests/ | Fixture-based browser and Rust parity checks |
 | .transfer/ | Disposable test profiles, tooling, experiments and release staging; never ship wholesale |
 
-Run `node build.mjs` from the project root. It regenerates app.js, ocr-core.js and
-ocr-engine.js. Other extension files are maintained directly. The build includes
+Run `npm ci` in a clean checkout, then `npm run build` (or `node build.mjs`) from
+the project root. The build compiles console.css, copies Tailwind/daisyUI licenses,
+and regenerates app.js, ocr-core.js and ocr-engine.js. Other extension files are
+maintained directly. The build includes
 string/regex transforms; some have guards, others do not. Inspect generated output.
-There is no root package.json/npm test command. `build.mjs` imports and invokes
+The root package.json provides the build script, but no npm test command.
+Its dependencies are CSS build tools, not browser test tooling. `build.mjs` imports and invokes
 `upgrade()` from scripts/build-transforms.mjs; do not run scripts/build-transforms.mjs as a standalone build.
 
 ## Runtime architecture
@@ -114,10 +125,26 @@ not guaranteed to be the last chronological chat message. Late old images can
 therefore be selected. forceScan also uses observed resource ordering. No fix yet.
 
 enqueue -> runJob -> RC.ocr -> ocrPipeline -> result text/segments -> showInBubble.
-applyToContainer may replace OCR text with original React source text. It uses
-textContent for content, and preserves non-experimental figure segments.
-reapplyAll restores missing output nodes after React rendering; it does not
-continuously upgrade existing output when original source arrives later.
+The default `sourceFirst` mode (UI: "Ưu tiên văn bản gốc") disables `wip`
+automatic OCR mode. Source-first still processes new image events, but tries
+full original content before starting OCR. Enabling automatic OCR explicitly
+disables source-first. Settings persist; existing installs default to source-first
+unless they have already saved an explicit sourceFirst preference.
+The bounded fiber walk finds the messages owner (observed at L8) and matches
+exactly one assistant by canvas identity/object_key. It reads only full content,
+never beforeContent or partial question/hint metadata. Ambiguous, missing and
+multipart array matches fall back to OCR. Source recovery uses textContent:
+LaTeX is preserved as source text, not newly typeset by this feature.
+reapplyAll also upgrades rendered bubbles when full source becomes available
+on a later DOM mutation. Existing detected figure segments are retained, and
+the original-image toggle remains available. OCR output no longer falls back
+to an arbitrary last bubble when an exact group match is missing.
+
+2026-11-13 live read-only inspection: 17/20 assistant entries had original content;
+the three recent canvas replies had empty content. Each recent canvas matched
+one message exactly. No reload/network experiment has established whether full
+content becomes available later. New source-first routing tests cover exact L8
+matching, empty/partial content fallback, ambiguity, reordering and mode choice.
 
 User reports old messages after reload have very accurate LaTeX/emoji, while
 realtime messages do not. Delayed source availability is a hypothesis, not a
@@ -142,6 +169,41 @@ version. Language-data/core mismatch was not confirmed. Do not hide warnings and
 claim the root cause is fixed.
 
 ## Themes, UI and music
+
+2026-11-13 console refresh: `source/console.css` is compiled with Tailwind 4 and
+daisyUI 5 (only prefixed button styles, no preflight) into `extension/console.css`
+and embedded in the shadow-root stylesheet by `source/console-ui.mjs`.
+Run `npm ci` before `node build.mjs` in a clean checkout; dependencies are locked.
+No runtime CDN or new permissions. Bundled CSS licenses ship in extension/.
+`source/console-ui.js` owns icon tabs, accessible selection, keyboard navigation,
+focus return and per-tab scroll restoration. Arrow keys move focus; Enter/Space
+activate. Tab keys remain theme/feat/ocr/music for saved-setting compatibility.
+The OCR tab is now labelled Văn bản. Panel layout is responsive with reduced-motion
+support. Console primary/secondary colors have their own settings and theme
+export keys; older imports retain existing console accents. Accent lightness is
+adapted to the selected light/dark mode; site primary colors remain independent.
+The panel defaults to 380 x 620 px. On 2026-11-14 the moving size sliders were
+replaced by persistent Compact/Default/Wide presets, actual-size readout and a
+top-right drag handle, implemented in source/console-size.js and injected by
+console-ui.mjs. Arrow keys resize (Shift for larger steps), Home/double-click
+reset size, and Escape cancels an active drag. Pointer capture and animation-frame
+updates keep dragging smooth without reapplying the page theme. Dimensions save
+on release. Viewport caps preserve preferred sizes; container queries adapt tabs.
+Portable themes retain the existing dimension keys and ranges.
+Presets are 320 x 520, 380 x 620 and 560 x 820; stored width ranges 320-560 and
+height 420-820. The panel remains bottom-left anchored, with a top-right grip.
+The grip's 12px arrow is hidden until corner hover, keyboard focus or active drag;
+its hit area remains 28 x 24px. Keyboard steps are 10px, or 40px with Shift.
+The subtitle was removed. The gradient now belongs to the panel with a transparent
+header, avoiding the former hard cutoff below the header.
+Recent session validation (before this documentation-only scan): node build.mjs,
+syntax checks and tests/console-ui.cjs passed using
+an isolated browser with a mocked EduNext page. Checks cover drag, cancellation,
+keyboard sizing, reload persistence, presets, viewport caps, tabs, light/dark,
+reduced motion and accents. Desktop and narrow screenshots visually reviewed.
+Authenticated live EduNext was not tested.
+Focused computed-style checks also verified the 12px arrow, hover reveal/hide
+and keyboard-focus visibility. These were ad hoc checks, not a saved test suite.
 
 - Theme import/export includes uploaded background images/video; preserve unrelated settings.
 - `dashboardBg` defaults to #1e293b; `imageThemeMode` defaults to `dark` and accepts
@@ -174,6 +236,8 @@ claim the root cause is fixed.
   title, elapsed/duration, seek, play/pause, show/hide video, close/stop.
 - Uses official remote SDKs in the page world. No audio ripping/download engine.
 - Open player requests playback once SDK is ready. No autoplay on page reload.
+- Both YouTube and Spotify start with the embed collapsed and playback controls
+  visible. This is distinct from minimizing the whole player to the corner icon.
 - Since 6.1.6, hiding video changes visibility ONLY: never issue pause or force
   expansion on resume. User explicitly requested ongoing audio while collapsed.
 - Actual service playback depends on browser/service restrictions. Spotify can
@@ -182,14 +246,19 @@ claim the root cause is fixed.
 ## Verification and commands
 
 ```powershell
+npm ci
 node build.mjs
 node --check extension/app.js
 node --check extension/ocr-core.js
+node --check extension/ocr-engine.js
 $env:RC_PLAYWRIGHT='D:\Ultimate RC Tool\.transfer\package\index.js'
 $env:RC_CHROME='D:\Ultimate RC Tool\.transfer\chrome-win64\chrome.exe'
 node tests/smoke.cjs
 node tests/question-text.cjs
 node tests/music.cjs
+node tests/console-ui.cjs
+node tests/source-first.cjs
+node tests/source-first-ui.cjs
 ```
 
 Verify these tool paths exist first. Some tests hard-code .transfer paths. Tests
@@ -201,13 +270,21 @@ use separate browser profiles; never automate the user's real profile by default
 - question-text.cjs: real OCR synthetic layout matching the reported question;
   1/2 workers, three answer options as text, no cropped segments, one HTML qbox.
 - music.cjs: mocked providers/SDKs; verifies URLs, visibility, play/pause, seek,
-  saved link and no startup playback. It does NOT prove live streaming works.
+  collapsed YouTube default, expand, minimize/restore, saved link and no startup
+  playback. It passed during the recent UI work, not rerun for this docs scan.
+  It does NOT prove live streaming works.
+- console-ui.cjs: presets, drag and pointer cancellation, Escape rollback,
+  keyboard resizing, persistence, viewport caps, tab navigation and theme layouts.
+- source-first.cjs: Node VM fixtures for exact content matching and fallbacks.
+- source-first-ui.cjs: browser checks for default mode and settings integration.
 - fidelity.cjs / tests/results/FIDELITY-TEST-RESULTS.json: historical 6.0.1 expectations for crops;
   stale since 6.1.2. Do not restore rejected behavior to make this test pass.
 - rust-parity.cjs and video-csp.cjs: specialized checks; read their prerequisites.
 - Existing JSON reports in `tests/results/` are historical artifacts, not proof for every new version.
 
-No authenticated live EduNext session was verified in this handoff.
+This documentation scan inspected source and existing test scripts without
+rerunning runtime suites or refreshing saved reports. The earlier read-only live
+inspection above is historical evidence, not current end-to-end verification.
 
 ## Release and next work
 
@@ -218,13 +295,15 @@ screenshots. ZIP root must contain extension/manifest.json at that relative path
 Install via chrome://extensions -> Developer mode -> Load unpacked -> extension.
 For updates: Reload extension, then reload EduNext to drop stale page code/results.
 
-Next: commit/push 2.0.0 when Git write access is available; validate SVG appearance in actual player.
+Pending work (not authorization to publish): commit/push 2.0.0 when requested and
+Git write access is available; validate SVG appearance in the actual player.
 Also validate navigation alignment on live EduNext and dark/light image palettes,
 dashboard controls and old/new theme roundtrips in-browser. Current checked-in
 tests do not provide dedicated coverage for the latest palette/navigation UI.
-The 2.0.0 cleanup rebuilt generated files and passed syntax checks and the mocked
+Historical validation from the 2.0.0 cleanup: generated files were rebuilt and
+passed syntax checks and the mocked
 music lifecycle test plus real OCR question-text checks with 1/2 workers.
 The question-text report was refreshed; other saved reports remain historical.
 No new ZIP was produced; load the current `extension/` folder.
-Future backlog ideas (NOT authorized work): draggable controls, playlists,
+Future backlog ideas (NOT authorized work): repositionable controls, playlists,
 OCR editing/comparison, theme schedules. Keep unrelated work out of small fixes.

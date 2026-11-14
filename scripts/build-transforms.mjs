@@ -1,5 +1,7 @@
 import fs from 'node:fs/promises';
 import {toolbar} from '../source/ocr-toolbar.mjs';
+import {sourceFirst} from '../source/source-first.mjs';
+import {consoleUI} from '../source/console-ui.mjs';
 export async function upgrade(app, engine, version) {
   const navBoundary = '    whenBody(initUI);';
   if (!app.includes(navBoundary)) throw Error('Navigation icons boundary missing');
@@ -110,6 +112,6 @@ export async function upgrade(app, engine, version) {
   // Strip decorative emoji from plain button labels; retain SVG controls.
   app=app.replace(/(<button\b[^>]*>)([^<>]*)(<\/button>)/gu, (_, open, label, close) =>
     open + label.replace(/[\p{Extended_Pictographic}\uFE0F\u200D]/gu, '').trim() + close);
-  return toolbar(app).replaceAll('v6.0.0', 'v' + version)
+  return (await consoleUI(sourceFirst(toolbar(app)))).replaceAll('v6.0.0', 'v' + version)
     .replace("const HUB_VER = '5.15-rust'", `const HUB_VER = '${version}'`);
 }

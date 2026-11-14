@@ -1,37 +1,48 @@
-    const TEX_RE = /\\(?:frac|dfrac|sqrt|cdot|times|pi|alpha|beta|theta|sum|int|left|right|begin|end|text|mathrm|ge|le|geq|leq|neq|approx|circ|angle|degree)\b|\$[^$\n]+\$|\\\(|\\\[/;
-    const SOURCE_KEY = /^(content|text|markdown|message|answer|response|body|source|rawText)$/i;
-    const SKIP_KEY = /^(url|src|href|id|className|key|ref|style|children|messages|history|conversation|testid|data-testid)$/i;
+    // Only read the exact message owning this canvas, never beforeContent or hints.
     function texCandidates(cont) {
-        const out = [], seen = new Set();
-        let budget=300;
-        const scan = (v,path,depth,lvl,key) => {
-            if (v == null || depth > 4 || --budget < 0) return;
-            if (typeof v === 'string') {
-                if (v.length >= 2 && v.length <= 200000 && !seen.has(v) &&
-                    (TEX_RE.test(v) || SOURCE_KEY.test(key)) && !/^\s*(?:https?:|data:)/i.test(v)) {
-                    seen.add(v); out.push({path,lvl,text:v});
-                }
-                return;
-            }
-            // Never search lists of other messages or React children.
-            if (typeof v !== 'object' || Array.isArray(v) || v instanceof Node || seen.has(v)) return;
-            seen.add(v);
-            for (const k of Object.keys(v).slice(0,40)) if (!SKIP_KEY.test(k)) {
-                try { scan(v[k],path+'.'+k,depth+1,lvl,k); } catch (_) {}
-            }
-        };
         try {
-            const key=Object.keys(cont).find(k=>k.startsWith('__reactFiber$'));
-            let f=key && cont[key];
-            for(let lvl=0;f && lvl<12;lvl++,f=f.return) {
-                if (lvl && f.stateNode instanceof Element &&
-                    (f.stateNode.matches('.chat-messages') || f.stateNode.querySelectorAll('[data-testid="chat-canvas-container"]').length>1)) break;
-                scan(f.memoizedProps,'L'+lvl,0,lvl,'');
-                if(out.length) break;
+            const key = Object.keys(cont).find(k => k.startsWith('__reactFiber$'));
+            let f = key && cont[key], canvas = null;
+            for (let lvl = 0; f && lvl < 20; lvl++, f = f.return) {
+                const props = f.memoizedProps;
+                if (!canvas && props?.canvas) {
+                    const cs = Array.isArray(props.canvas) ? props.canvas : [props.canvas];
+                    if (cs.length !== 1) return [];
+                    canvas = cs[0];
+                }
+                if (!canvas || !Array.isArray(props?.messages)) continue;
+                if (props.messages.length > 2000) return [];
+                const matches = props.messages.filter(m => {
+                    const c = m?.metadata?.canvas;
+                    return m?.role === 'assistant' && c && !Array.isArray(c) &&
+                        (c === canvas || (canvas.object_key && c.object_key === canvas.object_key));
+                });
+                if (matches.length !== 1) return [];
+                const text = matches[0].content;
+                return typeof text === 'string' && text.trim() && text.length <= 200000
+                    ? [{path: 'L' + lvl + '.messages[matched].content', lvl, text}] : [];
             }
         } catch (_) {}
-        return out.sort((a,b)=>a.lvl-b.lvl || b.text.length-a.text.length);
+        return [];
     }
     function latexSourceOf(cont) {
         return texCandidates(cont)[0]?.text.trim() || null;
+    }
+    function originalResult(url) {
+        if (!cfg.sourceFirst) return null;
+        const matches = containers().filter(c => urlOfContainer(c) === url);
+        if (matches.length !== 1) return null;
+        const text = latexSourceOf(matches[0]);
+        return text ? {text, segments: [{type: 'text', text}], original: true} : null;
+    }
+    function recoverOriginals() {
+        if (!cfg.sourceFirst || !cfg.replaceBubble) return;
+        for (const cont of containers()) {
+            const text = latexSourceOf(cont);
+            if (!text) continue;
+            const box = cont.parentElement?.querySelector(':scope > .rc-ocr-text');
+            if (box?.dataset.src === 'latex' && box.dataset.text === text) continue;
+            const segs = segByUrl.get(urlOfContainer(cont)) || [];
+            applyToContainer(cont, text, [{type: 'text', text}, ...segs.filter(g => g.type === 'img' && !g.preserved)]);
+        }
     }

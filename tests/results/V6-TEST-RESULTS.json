@@ -2,20 +2,20 @@
   "timings": [
     {
       "threads": 1,
-      "ocr": 1433,
-      "post": 7,
+      "ocr": 1583,
+      "post": 9,
       "strips": 1,
       "stripMs": [],
       "t": {
-        "lay": 2,
-        "bang": 4,
+        "lay": 4,
+        "bang": 5,
         "vung": 0,
         "hinh": 0,
         "hinhs": 0
       },
-      "load": 10,
-      "pool": 205,
-      "total": 1683,
+      "load": 12,
+      "pool": 289,
+      "total": 1951,
       "workers": 1,
       "backend": "rust",
       "cached": false,
@@ -23,53 +23,53 @@
     },
     {
       "threads": 2,
-      "ocr": 1251,
-      "post": 7,
+      "ocr": 1318,
+      "post": 9,
       "strips": 3,
       "stripMs": [
-        1239,
-        1183,
-        1236
+        1313,
+        1233,
+        1296
       ],
       "t": {
         "lay": 3,
-        "bang": 4,
+        "bang": 6,
         "vung": 0,
         "hinh": 0,
         "hinhs": 0
       },
-      "load": 6,
-      "pool": 220,
-      "total": 1510,
+      "load": 9,
+      "pool": 282,
+      "total": 1652,
       "workers": 2,
       "backend": "rust",
       "cached": false,
-      "queue": 0
+      "queue": 1
     },
     {
       "threads": 4,
-      "ocr": 1241,
-      "post": 6,
+      "ocr": 1339,
+      "post": 8,
       "strips": 3,
       "stripMs": [
-        1236,
-        1198,
-        1160
+        1333,
+        1275,
+        1216
       ],
       "t": {
-        "lay": 2,
-        "bang": 4,
+        "lay": 4,
+        "bang": 5,
         "vung": 0,
         "hinh": 0,
         "hinhs": 0
       },
-      "load": 7,
-      "pool": 311,
-      "total": 1601,
+      "load": 8,
+      "pool": 366,
+      "total": 1755,
       "workers": 4,
       "backend": "rust",
       "cached": false,
-      "queue": 0
+      "queue": 1
     },
     {
       "mode": "content-cache",
@@ -77,20 +77,20 @@
       "post": 0,
       "strips": 3,
       "stripMs": [
-        1236,
-        1198,
-        1160
+        1333,
+        1275,
+        1216
       ],
       "t": {
-        "lay": 2,
-        "bang": 4,
+        "lay": 4,
+        "bang": 5,
         "vung": 0,
         "hinh": 0,
         "hinhs": 0
       },
-      "load": 5,
+      "load": 6,
       "pool": 0,
-      "total": 5,
+      "total": 6,
       "workers": 4,
       "backend": "rust",
       "cached": true,
@@ -98,28 +98,28 @@
     },
     {
       "mode": "warm-pool",
-      "ocr": 1191,
-      "post": 9,
+      "ocr": 1272,
+      "post": 15,
       "strips": 3,
       "stripMs": [
-        1186,
-        1115,
-        1055
+        1266,
+        1164,
+        1096
       ],
       "t": {
-        "lay": 5,
-        "bang": 4,
+        "lay": 8,
+        "bang": 7,
         "vung": 0,
         "hinh": 0,
         "hinhs": 0
       },
-      "load": 2,
+      "load": 3,
       "pool": 0,
-      "total": 1230,
+      "total": 1326,
       "workers": 4,
       "backend": "rust",
       "cached": false,
-      "queue": 1
+      "queue": 0
     }
   ],
   "limitations": "Synthetic English fixture; not a live EduNext latency or accuracy benchmark."
