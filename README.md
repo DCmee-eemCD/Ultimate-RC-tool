@@ -186,22 +186,75 @@ API settings use a slim, theme-matched scrollbar and support the mouse
 wheel, touch or keyboard. The form fits its frame automatically, so there is
 only one scrolling area when it is taller than the available screen space.
 
-## Install
+## Install in Chrome
 
-1. Clone/download this repository (or extract a release ZIP) into a permanent folder.
-2. Disable **Ultimate RC tools** in Tampermonkey to prevent duplicate handlers/UI.
-3. Open `chrome://extensions` and enable **Developer mode**.
-4. Choose **Load unpacked**, then select the **extension** folder (the folder
-   containing `manifest.json`).
-5. Reload `https://fsc-edunext.fpt.edu.vn/` and sign in as usual.
-6. The Fe logo settings launcher and text button appear at bottom left. `Alt+C`
-   toggles settings; `Esc` closes them unless cancelling a resize drag.
-   The text button shows **Chữ gốc** in source-first mode or **OCR** in OCR mode.
-   Right-click it to scan the latest observed image.
+### 1. Download and extract
 
-No build, Node.js, Rust, server or Tampermonkey installation is needed to run it.
-This is a local unpacked extension, not a Chrome Web Store publication.
-The manifest minimum is Chrome 116; use current Chrome for the latest UI.
+1. Open the [GitHub Releases page](https://github.com/DCmee-eemCD/Ultimate-RC-tool/releases).
+2. Under the release's **Assets**, download **Ultimate-RC-tools-v2.0.0-unpacked.zip**
+   (or the equivalent unpacked ZIP for a newer version).
+3. Right-click the downloaded ZIP and choose **Extract All...** on Windows.
+4. Extract it into a permanent folder, such as `Documents/Ultimate-RC-tools`.
+   Keep this folder after installation: Chrome loads the extension from it.
+
+The release ZIP contains an **extension** folder, **INSTALL.txt**, **README.md**,
+and **LICENSE**. Use the unpacked ZIP attached to the release for these steps;
+GitHub's automatic **Source code** downloads contain the full development project.
+
+### 2. Load the extension
+
+1. If you previously installed Ultimate RC tools in Tampermonkey, disable that
+   userscript to prevent duplicate buttons and actions.
+2. Paste `chrome://extensions` into Chrome's address bar and press **Enter**.
+3. Turn on **Developer mode** in the top-right corner.
+4. Click **Load unpacked**.
+5. Open the folder you extracted and select its **extension** folder.
+   This is the folder containing `manifest.json`; do not select the ZIP or its
+   outer folder.
+6. Confirm that **Ultimate RC tools** appears in the extension list and is enabled.
+
+No build, Node.js, Rust, server or Tampermonkey installation is needed.
+This is an unpacked extension, not a Chrome Web Store installation.
+The manifest requires Chrome 116 or newer.
+
+### 3. Open EduNext
+
+1. Open [EduNext](https://fsc-edunext.fpt.edu.vn/) and sign in as usual.
+   If it is already open, refresh the page.
+2. Look for the **Fe logo** settings launcher and text button at the bottom left.
+3. Click the Fe logo or press **Alt+C** to open settings. Press **Esc** to close
+   them unless cancelling a resize drag.
+
+The text button shows **Chữ gốc** in source-first mode or **OCR** in OCR mode.
+Right-click it to scan the latest observed image. OCR runs locally and needs no
+API key. The optional AI assistant needs your own provider settings; see
+[BYOK short answers](#byok-short-answers).
+
+### Update an existing installation
+
+1. Download and extract the new release ZIP.
+2. Close any open EduNext tabs, then copy the contents of the new **extension**
+   folder into the same **extension** folder you originally loaded. Choose to
+   replace existing files.
+3. Open `chrome://extensions`, find **Ultimate RC tools**, and click its
+   **Reload** button (the circular arrow).
+4. Reopen EduNext.
+
+Keep the same installation folder and reload the existing extension to retain
+its saved settings. You do not need to remove and reinstall it.
+
+### If it does not load
+
+- **Manifest file is missing or unreadable:** extract the ZIP first, then select
+  the **extension** folder containing `manifest.json`.
+- **No Load unpacked button:** turn on **Developer mode** at
+  `chrome://extensions`.
+- **No buttons on EduNext:** make sure the extension is enabled, check that you
+  are on `https://fsc-edunext.fpt.edu.vn/`, and refresh the page.
+- **Duplicate buttons:** disable the old Ultimate RC tools Tampermonkey
+  userscript or any duplicate installation, then refresh EduNext.
+- **Extension stopped working after moving files:** restore the extracted folder
+  to its original location, then reload the extension.
 
 ## What changed internally
 
