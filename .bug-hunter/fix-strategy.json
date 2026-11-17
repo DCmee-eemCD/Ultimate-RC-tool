@@ -1,0 +1,34 @@
+{
+  "version": "3.0.0",
+  "generatedAt": "2026-11-17T11:07:44.533Z",
+  "confidenceThreshold": 75,
+  "summary": {
+    "confirmed": 1,
+    "safeAutofix": 1,
+    "manualReview": 0,
+    "largerRefactor": 0,
+    "architecturalRemediation": 0,
+    "canaryCandidates": 1,
+    "rolloutCandidates": 0
+  },
+  "clusters": [
+    {
+      "clusterId": "PAGE-1",
+      "strategy": "safe-autofix",
+      "executionStage": "canary",
+      "autofixEligible": true,
+      "bugIds": [
+        "PAGE-1"
+      ],
+      "files": [
+        "extension/app.js"
+      ],
+      "maxSeverity": "Medium",
+      "summary": "Copy latest returns stale OCR after original text becomes available.",
+      "recommendedAction": "Refresh current originals for the target group's URLs before the cached copy fast path, preserving non-placeholder image segments.",
+      "reasons": [
+        "Reproduced or independently traced with confidence >=75%."
+      ]
+    }
+  ]
+}

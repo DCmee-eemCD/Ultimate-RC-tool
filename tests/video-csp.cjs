@@ -2,9 +2,10 @@ const fs=require('node:fs/promises');
 const path=require('node:path');
 const https=require('node:https');
 const assert=require('node:assert/strict');
-const {chromium}=require(process.env.RC_PLAYWRIGHT||'playwright');
-const forge=require(process.env.RC_FORGE||'node-forge');
-const root=path.resolve(__dirname,'..');
+const {ROOT: root, launchExtension} = require('./lib/browser.cjs');
+// Allow isolated test tooling without adding it to the extension build dependencies.
+const localForge=path.join(root,'.transfer','forge','package');
+const forge=require(process.env.RC_FORGE||(require('node:fs').existsSync(path.join(localForge,'package.json'))?localForge:'node-forge'));
 (async()=>{
   const keys=forge.pki.rsa.generateKeyPair(2048),cert=forge.pki.createCertificate();
   cert.publicKey=keys.publicKey;cert.serialNumber='01';cert.validity.notBefore=new Date();
@@ -21,11 +22,9 @@ const root=path.resolve(__dirname,'..');
   });
   await new Promise(r=>server.listen(0,'127.0.0.1',r));
   const port=server.address().port;
-  const profile=await fs.mkdtemp(path.join(root,'.transfer','video-run-'));
-  const context=await chromium.launchPersistentContext(profile,{
-    executablePath:process.env.RC_CHROME,headless:true,ignoreHTTPSErrors:true,
-    args:['--disable-extensions-except='+path.join(root,'extension'),'--load-extension='+path.join(root,'extension'),
-      '--ignore-certificate-errors','--no-proxy-server','--host-resolver-rules=MAP fsc-edunext.fpt.edu.vn 127.0.0.1:'+port+', MAP other.invalid 127.0.0.1:'+port]
+  const context=await launchExtension('video-run',{
+    ignoreHTTPSErrors:true,
+    args:['--ignore-certificate-errors','--no-proxy-server','--host-resolver-rules=MAP fsc-edunext.fpt.edu.vn 127.0.0.1:'+port+', MAP other.invalid 127.0.0.1:'+port]
   });
   const results=[];const pass=name=>{results.push({name,status:'passed'});console.log('PASS',name);};
   try{

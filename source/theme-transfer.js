@@ -16,7 +16,7 @@
                 if(colors.includes(k))ok=typeof v==='string' && /^#[\da-f]{6}$/i.test(v);
                 else if(ranges[k])ok=Number.isFinite(v) && v>=ranges[k][0] && v<=ranges[k][1];
                 else if(['autoTheme','glass','siteWide'].includes(k))ok=typeof v==='boolean';
-                else if(k==='imageThemeMode')ok=v==='dark' || v==='light';
+                else if(k==='imageThemeMode')ok=['dark','light','auto'].includes(v);
                 else if(k==='fontFamily')ok=typeof v==='string' && v.length<=160 && /^[\p{L}\p{N}\s,"'-]*$/u.test(v);
                 else if(k==='bgImage') {
                     ok=typeof v==='string' && (v==='' || v===VID_LOCAL || dataMedia.test(v));
@@ -49,7 +49,7 @@
                 if(file.size>25*1024*1024)throw Error('File theme tối đa 25 MB.');
                 const doc=JSON.parse(await file.text()),theme=validateTheme(doc);
                 // Validate the entire file before changing any stored value.
-                await RC.themeImport({...cfg,...theme,autoFor:theme.bgImage},doc.video);
+                await RC.themeImport({...cfg,...theme,themeBasePalette:null,autoFor:theme.bgImage},doc.video);
                 location.reload();
             }catch(e){toast('Không nhập được: '+e.message);}
         });

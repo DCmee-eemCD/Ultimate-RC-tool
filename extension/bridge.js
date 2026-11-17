@@ -1,10 +1,14 @@
 (() => {
   const allowedKey = k => typeof k==='string' && /^(chatKit|chatKitBgVid|rc_ocr_[\w-]+)$/.test(k);
+  const publicValues = values => Object.fromEntries(Object.entries(values).filter(([key]) => allowedKey(key)));
   const send=m=>window.postMessage(m,location.origin);
   let initialized=false;
   const valuesPromise=chrome.storage.local.get(null);
   chrome.storage.onChanged.addListener((changes,area)=>{
-    if(area==='local' && initialized)send({rcExtension:'changes',changes});
+    if(area==='local' && initialized){
+      const visible=publicValues(changes);
+      if(Object.keys(visible).length)send({rcExtension:'changes',changes:visible});
+    }
   });
   const background=async m=>{
     const r=await chrome.runtime.sendMessage(m);
@@ -37,7 +41,7 @@
       await valuesPromise;
       // Fresh snapshot also covers changes that arrived before the handshake.
       const values=await chrome.storage.local.get(null);initialized=true;
-      send({rcExtension:'init',values});return;
+      send({rcExtension:'init',values:publicValues(values)});return;
     }
     if(m?.rcExtension!=='request' || !Number.isInteger(m.id))return;
     try{

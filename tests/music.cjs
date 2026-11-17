@@ -1,5 +1,6 @@
-const fs=require('fs'),path=require('path'),assert=require('assert/strict'),{chromium}=require('../.transfer/package');
-(async()=>{const root=path.resolve(__dirname,'..');const ctx=await chromium.launchPersistentContext(fs.mkdtempSync(path.join(root,'.transfer/music-')),{executablePath:path.join(root,'.transfer/chrome-win64/chrome.exe'),headless:true,args:['--disable-extensions-except='+path.join(root,'extension'),'--load-extension='+path.join(root,'extension')]});try{
+const assert=require('assert/strict');
+const {launchExtension} = require('./lib/browser.cjs');
+(async()=>{const ctx=await launchExtension('music');try{
 await ctx.route('https://fsc-edunext.fpt.edu.vn/**',r=>r.fulfill({body:'<!doctype html><body>Music fixture</body>',contentType:'text/html'}));
 await ctx.route(/https:\/\/(www.youtube.com|open.spotify.com)\/embed\//,r=>r.fulfill({body:'<button>Mock player</button>',contentType:'text/html'}));
 await ctx.addInitScript(()=>{
@@ -7,20 +8,20 @@ await ctx.addInitScript(()=>{
 });
 await ctx.route('https://open.spotify.com/embed/iframe-api/v1',r=>r.fulfill({contentType:'application/javascript',body:`window.onSpotifyIframeApiReady({createController(el,opts,cb){const f=document.createElement('iframe');f.src='https://open.spotify.com/embed/track/0Lr4kGOYn9l83EjuK6cZFQ';el.replaceWith(f);let notify;cb({play(){window.spotifyPlayCalled=true},destroy(){f.remove()},addListener(n,fn){notify=fn;fn({data:{position:10000,duration:180000,isPaused:true}})},togglePlay(){notify({data:{position:10000,duration:180000,isPaused:false}})},seek(s){window.lastSeek=s;notify({data:{position:s*1000,duration:180000,isPaused:false}})}})}});` }));
 const p=await ctx.newPage();await p.goto('https://fsc-edunext.fpt.edu.vn/');await p.locator('#gear').click();await p.locator('[data-tab="music"]').click();
-const input=p.locator('#rc-music-url');await input.fill('https://youtu.be/dQw4w9WgXcQ');await p.locator('#rc-music-load').click();console.log(await p.locator('#rc-music-status').innerText());assert.match(await p.locator('iframe').getAttribute('src'),/youtube.com\/embed\/dQw4w9WgXcQ/);
-assert.equal(await p.evaluate(()=>window.autoPlayCalled),true);await p.locator('#rk-close').click();assert.equal(await p.locator('iframe').isVisible(),false);
-const expand=p.locator('button[aria-expanded="false"]').filter({has:p.locator('svg')});
-await expand.click();assert.equal(await p.locator('iframe').isVisible(),true);
+const input=p.locator('#rc-music-url');await input.fill('https://youtu.be/dQw4w9WgXcQ');await p.locator('#rc-music-load').click();console.log(await p.locator('#rc-music-status').innerText());assert.match(await p.locator('iframe[src*="youtube.com/embed/"], iframe[src*="spotify.com/embed/"]').getAttribute('src'),/youtube.com\/embed\/dQw4w9WgXcQ/);
+assert.equal(await p.evaluate(()=>window.autoPlayCalled),true);await p.locator('#rk-close').click();assert.equal(await p.locator('iframe[src*="youtube.com/embed/"], iframe[src*="spotify.com/embed/"]').isVisible(),false);
+const expand=p.locator('button[aria-expanded="false"]:not(#ai-toggle)').filter({has:p.locator('svg')});
+await expand.click();assert.equal(await p.locator('iframe[src*="youtube.com/embed/"], iframe[src*="spotify.com/embed/"]').isVisible(),true);
 const mini=p.locator('#rc-music-mini'),minimize=p.locator('#rc-music-minimize');
-assert.equal(await mini.isVisible(),false);await minimize.click();assert.equal(await mini.isVisible(),true);assert.equal(await p.locator('iframe').isVisible(),false);assert.equal(await p.locator('iframe').count(),1);assert.equal(await p.evaluate(()=>window.pauseCalls||0),0);
-const miniSize=await mini.boundingBox();assert.equal(miniSize.width,48);assert.equal(miniSize.height,48);await mini.press('Enter');assert.equal(await mini.isVisible(),false);assert.equal(await p.locator('iframe').isVisible(),true);
-await p.getByRole('button',{name:'Ẩn video'}).click();assert.equal(await p.locator('iframe').isVisible(),false);
-assert.equal(await p.evaluate(()=>window.pauseCalls||0),0);await p.getByTitle('Phát / tạm dừng').click();assert.equal(await p.evaluate(()=>window.pauseCalls),1);await p.getByTitle('Phát / tạm dừng').click();assert.equal(await p.locator('iframe').isVisible(),false);
+assert.equal(await mini.isVisible(),false);await minimize.click();assert.equal(await mini.isVisible(),true);assert.equal(await p.locator('iframe[src*="youtube.com/embed/"], iframe[src*="spotify.com/embed/"]').isVisible(),false);assert.equal(await p.locator('iframe[src*="youtube.com/embed/"], iframe[src*="spotify.com/embed/"]').count(),1);assert.equal(await p.evaluate(()=>window.pauseCalls||0),0);
+const miniSize=await mini.boundingBox();assert.equal(miniSize.width,48);assert.equal(miniSize.height,48);await mini.press('Enter');assert.equal(await mini.isVisible(),false);assert.equal(await p.locator('iframe[src*="youtube.com/embed/"], iframe[src*="spotify.com/embed/"]').isVisible(),true);
+await p.getByRole('button',{name:'Ẩn video'}).click();assert.equal(await p.locator('iframe[src*="youtube.com/embed/"], iframe[src*="spotify.com/embed/"]').isVisible(),false);
+assert.equal(await p.evaluate(()=>window.pauseCalls||0),0);await p.getByTitle('Phát / tạm dừng').click();assert.equal(await p.evaluate(()=>window.pauseCalls),1);await p.getByTitle('Phát / tạm dừng').click();assert.equal(await p.locator('iframe[src*="youtube.com/embed/"], iframe[src*="spotify.com/embed/"]').isVisible(),false);
 await p.getByLabel('Tua nhạc').fill('60');await p.getByLabel('Tua nhạc').dispatchEvent('change');assert.equal(await p.evaluate(()=>window.lastSeek),60);
-await p.getByRole('button',{name:'Dừng và đóng nhạc'}).click();assert.equal(await p.locator('iframe').count(),0);
-await p.locator('#gear').click();await input.fill('https://open.spotify.com/track/0Lr4kGOYn9l83EjuK6cZFQ');await p.locator('#rc-music-load').click();assert.match(await p.locator('iframe').getAttribute('src'),/spotify.com\/embed\/track/);
-await input.fill('https://youtube.com.evil.example/watch?v=dQw4w9WgXcQ');await p.locator('#rc-music-load').click();assert.match(await p.locator('#rc-music-status').innerText(),/Chỉ hỗ trợ/);assert.equal(await p.locator('iframe').count(),1);
-await p.locator('#rk-close').click();await minimize.click();assert.equal(await mini.isVisible(),true);await p.locator('#gear').click();await p.locator('#rc-music-stop').click();assert.equal(await mini.isVisible(),false);assert.equal(await p.locator('iframe').count(),0);
-await p.reload();await p.locator('#gear').click();assert.match(await p.locator('#rc-music-url').inputValue(),/open.spotify.com/);assert.equal(await p.locator('iframe').count(),0);
+await p.getByRole('button',{name:'Dừng và đóng nhạc'}).click();assert.equal(await p.locator('iframe[src*="youtube.com/embed/"], iframe[src*="spotify.com/embed/"]').count(),0);
+await p.locator('#gear').click();await input.fill('https://open.spotify.com/track/0Lr4kGOYn9l83EjuK6cZFQ');await p.locator('#rc-music-load').click();assert.match(await p.locator('iframe[src*="youtube.com/embed/"], iframe[src*="spotify.com/embed/"]').getAttribute('src'),/spotify.com\/embed\/track/);
+await input.fill('https://youtube.com.evil.example/watch?v=dQw4w9WgXcQ');await p.locator('#rc-music-load').click();assert.match(await p.locator('#rc-music-status').innerText(),/Chỉ hỗ trợ/);assert.equal(await p.locator('iframe[src*="youtube.com/embed/"], iframe[src*="spotify.com/embed/"]').count(),1);
+await p.locator('#rk-close').click();await minimize.click();assert.equal(await mini.isVisible(),true);await p.locator('#gear').click();await p.locator('#rc-music-stop').click();assert.equal(await mini.isVisible(),false);assert.equal(await p.locator('iframe[src*="youtube.com/embed/"], iframe[src*="spotify.com/embed/"]').count(),0);
+await p.reload();await p.locator('#gear').click();assert.match(await p.locator('#rc-music-url').inputValue(),/open.spotify.com/);assert.equal(await p.locator('iframe[src*="youtube.com/embed/"], iframe[src*="spotify.com/embed/"]').count(),0);
 console.log('PASS: URL validation, provider embeds, visible playback after panel close, stop, saved URL and no autoplay after reload. Provider responses mocked; real streaming not tested.');
 }finally{await ctx.close();}})().catch(e=>{console.error(e);process.exitCode=1;});

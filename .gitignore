@@ -52,4 +52,4 @@ test-results/
 /RULES.md
 
 # Local AI agent configuration
-/.agents/skills/
+/.agents/skills//.bug-hunter/

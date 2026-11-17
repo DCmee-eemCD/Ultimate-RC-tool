@@ -1,0 +1,80 @@
+[
+  {
+    "date": "2026-11-18",
+    "mode": "redesign",
+    "depth": "full",
+    "scope": "app",
+    "theme": "brand, saved console palettes",
+    "shape": "question-first workspace and grouped connection form",
+    "entry": "source/assistant.css",
+    "signature": "current question paired with explicit automation switch",
+    "nav": "companion panel and prominent back arrow",
+    "sections": ["question", "automation and answer", "status", "connection", "credentials", "disclosure and save"],
+    "material": "existing app content, no photos or new claims",
+    "waived": [],
+    "review": "subagent: ship, no actionable findings",
+    "verification": "Build, syntax and four focused UI fixtures passed. Two redesigned stylesheets: 0 FAIL, 0 REFLEX, 0 WARN. Native renderer unavailable; isolated Playwright captures used. Generated shared CSS findings remain outside scope. Primary button contrast 6.54:1 or higher in inspected modes.",
+    "prompt": "hallmark redesign - all of the assistant and api setting GUI"
+  },
+  {
+    "date": "2026-11-17",
+    "mode": "redesign",
+    "depth": "full",
+    "scope": "app",
+    "theme": "console",
+    "shape": "compact connection form",
+    "entry": "extension/llm-settings.css",
+    "signature": "integrated key control and full-width save",
+    "nav": "existing companion",
+    "sections": [
+      "endpoint",
+      "model",
+      "key",
+      "disclosure",
+      "save"
+    ],
+    "material": "existing settings fields and copy",
+    "waived": [],
+    "review": "ship",
+    "verification": "build, syntax, standalone settings, embedded API, preview passed; source CSS clean; Playwright capture",
+    "prompt": "API setting GUI is still suck"
+  },
+  {
+    "date": "2026-11-16",
+    "mode": "redesign",
+    "depth": "full",
+    "scope": "app",
+    "theme": "rim",
+    "axes": "dark/grotesk-sans/cool",
+    "shape": "app screen",
+    "nav": "four existing tabs",
+    "footer": "kept sizing and shortcuts",
+    "signature": "horizontal palette index and responsive groups",
+    "imagery": "actual extension screenshots",
+    "photos": [],
+    "entry": "source/console.css",
+    "sections": [
+      "appearance",
+      "utilities",
+      "text",
+      "music",
+      "AI",
+      "API settings"
+    ],
+    "waived": [
+      "24b: existing compact optical dimensions"
+    ],
+    "prompt": "Hallmark redesign D:/Ultimate RC Tool",
+    "review": {
+      "verdict": "fix",
+      "findings": 3,
+      "resolved": 3
+    },
+    "verification": {
+      "maintainedCss": "0 FAIL; compact spacing waived",
+      "nativeRender": "unavailable; Playwright captures inspected",
+      "consoleTest": "obsolete width-animation assertion remains; supplemental behavior checks passed",
+      "api": "standalone and embedded passed"
+    }
+  }
+]

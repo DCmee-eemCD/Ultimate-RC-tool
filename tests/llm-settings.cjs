@@ -1,0 +1,61 @@
+const assert = require('node:assert/strict');
+const path = require('node:path');
+const {launchExtension, TRANSFER} = require('./lib/browser.cjs');
+
+(async () => {
+  const context = await launchExtension('llm-settings');
+  try {
+    const worker = context.serviceWorkers()[0] || await context.waitForEvent('serviceworker');
+    const origin = 'chrome-extension://' + new URL(worker.url()).host;
+    const page = await context.newPage();
+    await page.goto(origin + '/llm-settings.html');
+    await page.locator('#save').waitFor({state:'visible'});
+    await page.waitForFunction(() => !document.querySelector('#save').disabled);
+    await page.locator('#endpoint').fill('');
+    assert.equal(await page.locator('#endpoint').getAttribute('required'), null);
+    await page.locator('#model').fill('fixture-model');
+    await page.locator('#key').fill('fixture-key-not-a-real-secret');
+    await page.locator('#save').click();
+    await page.waitForFunction(() => document.querySelector('#status').dataset.state === 'success');
+    assert.equal(await page.locator('#key').inputValue(), '');
+    const config = await page.evaluate(async () => (await chrome.runtime.sendMessage({op: 'llm-config-get'})).result);
+    assert.equal(config.hasKey, true);
+    assert.equal(config.model, 'fixture-model');
+    assert.equal(config.endpoint, '');
+    assert.equal(await page.locator('#endpoint').inputValue(), config.endpoint);
+    assert.equal(Object.hasOwn(config, 'key'), false);
+    await page.reload();
+    await page.waitForFunction(() => document.querySelector('#key-status').dataset.state === 'saved');
+    assert.equal(await page.locator('#key').inputValue(), '');
+    assert.equal(await page.locator('#endpoint').inputValue(), '');
+    await page.locator('#endpoint').fill('https://other-provider.example/v1');
+    await page.locator('#save').click();
+    await page.waitForFunction(() => document.querySelector('#status').dataset.state === 'error');
+    const stored = await worker.evaluate(async () => (await chrome.storage.local.get('rcLlmConfig')).rcLlmConfig);
+    assert.equal(stored.endpoint, '');
+    // Clearing a credential must work even if the form has an invalid edit.
+    await page.locator('#endpoint').fill('invalid-url');
+    await page.locator('#model').fill('');
+    await page.locator('#clear-key').click();
+    await page.waitForFunction(() => document.querySelector('#key-status').dataset.state === 'empty');
+    const cleared = await page.evaluate(async () => (await chrome.runtime.sendMessage({op: 'llm-config-get'})).result);
+    assert.equal(cleared.hasKey, false);
+    await page.locator('#endpoint').fill('api.groq.com');
+    await page.locator('#model').fill('fixture-model');
+    assert.equal(await page.locator('#endpoint').inputValue(), 'api.groq.com');
+    await page.locator('#key').fill('fixture-groq-key');
+    await page.locator('#save').click();
+    await page.waitForFunction(() => document.querySelector('#status').dataset.state === 'success');
+    const groq = await page.evaluate(async () => (await chrome.runtime.sendMessage({op:'llm-config-get'})).result);
+    assert.equal(groq.endpoint, 'api.groq.com');
+    assert.equal(await page.locator('#endpoint').inputValue(), 'api.groq.com');
+    assert.equal(groq.hasKey, true);
+    await page.reload();
+    await page.waitForFunction(() => document.querySelector('#endpoint').value === 'api.groq.com');
+    await page.screenshot({path: path.join(TRANSFER, 'llm-settings-desktop.png'), fullPage: true, animations: 'disabled'});
+    await page.setViewportSize({width: 360, height: 800});
+    await page.screenshot({path: path.join(TRANSFER, 'llm-settings-mobile.png'), fullPage: true, animations: 'disabled'});
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+    console.log('PASS: settings save/reload, no key readback, endpoint-change protection, key deletion, mobile layout.');
+  } finally { await context.close(); }
+})().catch(error => { console.error(error); process.exitCode = 1; });

@@ -2,7 +2,7 @@
   "browser": "157.0.8103.50",
   "results": [
     {
-      "name": "Original three-tab GUI loads with strict page CSP",
+      "name": "Four-tab GUI loads with strict page CSP",
       "status": "passed"
     },
     {
@@ -59,70 +59,70 @@
       "details": [
         {
           "threads": 1,
-          "ocr": 1583,
-          "post": 9,
+          "ocr": 1675,
+          "post": 15,
           "strips": 1,
           "stripMs": [],
           "t": {
-            "lay": 4,
+            "lay": 5,
+            "bang": 9,
+            "vung": 0,
+            "hinh": 0,
+            "hinhs": 0
+          },
+          "load": 10,
+          "pool": 258,
+          "total": 1989,
+          "workers": 1,
+          "backend": "rust",
+          "cached": false,
+          "queue": 1
+        },
+        {
+          "threads": 2,
+          "ocr": 1316,
+          "post": 7,
+          "strips": 3,
+          "stripMs": [
+            1301,
+            1231,
+            1298
+          ],
+          "t": {
+            "lay": 2,
             "bang": 5,
             "vung": 0,
             "hinh": 0,
             "hinhs": 0
           },
           "load": 12,
-          "pool": 289,
-          "total": 1951,
-          "workers": 1,
+          "pool": 325,
+          "total": 1697,
+          "workers": 2,
           "backend": "rust",
           "cached": false,
           "queue": 0
         },
         {
-          "threads": 2,
-          "ocr": 1318,
-          "post": 9,
-          "strips": 3,
-          "stripMs": [
-            1313,
-            1233,
-            1296
-          ],
-          "t": {
-            "lay": 3,
-            "bang": 6,
-            "vung": 0,
-            "hinh": 0,
-            "hinhs": 0
-          },
-          "load": 9,
-          "pool": 282,
-          "total": 1652,
-          "workers": 2,
-          "backend": "rust",
-          "cached": false,
-          "queue": 1
-        },
-        {
           "threads": 4,
-          "ocr": 1339,
-          "post": 8,
+          "ocr": 1433,
+          "post": 16,
           "strips": 3,
           "stripMs": [
-            1333,
-            1275,
-            1216
+            1428,
+            1330,
+            1269
           ],
           "t": {
-            "lay": 4,
-            "bang": 5,
+            "lay": 7,
+            "bang": 9,
             "vung": 0,
             "hinh": 0,
             "hinhs": 0
           },
-          "load": 8,
-          "pool": 366,
-          "total": 1755,
+          "load": 7,
+          "pool": 392,
+          "total": 1882,
           "workers": 4,
           "backend": "rust",
           "cached": false,
@@ -134,20 +134,20 @@
           "post": 0,
           "strips": 3,
           "stripMs": [
-            1333,
-            1275,
-            1216
+            1428,
+            1330,
+            1269
           ],
           "t": {
-            "lay": 4,
-            "bang": 5,
+            "lay": 7,
+            "bang": 9,
             "vung": 0,
             "hinh": 0,
             "hinhs": 0
           },
-          "load": 6,
+          "load": 13,
           "pool": 0,
-          "total": 6,
+          "total": 13,
           "workers": 4,
           "backend": "rust",
           "cached": true,
@@ -155,24 +155,24 @@
         },
         {
           "mode": "warm-pool",
-          "ocr": 1272,
-          "post": 15,
+          "ocr": 1284,
+          "post": 26,
           "strips": 3,
           "stripMs": [
-            1266,
-            1164,
-            1096
+            1270,
+            1163,
+            1093
           ],
           "t": {
-            "lay": 8,
+            "lay": 19,
             "bang": 7,
             "vung": 0,
             "hinh": 0,
             "hinhs": 0
           },
-          "load": 3,
+          "load": 5,
           "pool": 0,
-          "total": 1326,
+          "total": 1371,
           "workers": 4,
           "backend": "rust",
           "cached": false,

@@ -1,4 +1,4 @@
-importScripts('wasm-kernels.js');
+importScripts('wasm-kernels.js', 'llm-endpoint.js', 'llm.js');
 const extensionRoot=chrome.runtime.getURL('');
 const trusted=sender=>sender.id===chrome.runtime.id &&
   (sender.url?.startsWith(extensionRoot)||new URL(sender.url||'https://invalid').origin==='https://fsc-edunext.fpt.edu.vn');
@@ -35,6 +35,11 @@ function validateImageUrl(raw){
 }
 async function handle(m,sender){
   if(!trusted(sender))throw new Error('Untrusted sender');
+  if(m.op==='llm-settings-open'){
+    if(sender.frameId!==0 || new URL(sender.url).origin!=='https://fsc-edunext.fpt.edu.vn')throw new Error('Invalid settings sender');
+    await chrome.runtime.openOptionsPage();return;
+  }
+  if(m.op?.startsWith('llm-'))return RCLLM.handle(m,sender);
   switch(m.op){
     case 'ocr': {
       validateImageUrl(m.url);

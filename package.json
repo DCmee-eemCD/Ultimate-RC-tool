@@ -1,6 +1,11 @@
 {
   "private": true,
-  "scripts": {"build": "node build.mjs"},
+  "scripts": {
+    "build": "node build.mjs",
+    "check": "node --check extension/app.js && node --check extension/ocr-core.js && node --check extension/ocr-engine.js && node --check extension/auto-answer.js && node --check extension/llm-endpoint.js && node --check extension/llm.js && node --check extension/llm-settings.js && node --check extension/background.js && node --check extension/bridge.js",
+    "test": "node tests/source-first.cjs",
+    "test:byok": "node tests/llm.cjs && node tests/bridge-secrets.cjs && node tests/auto-answer.cjs && node tests/ai-panel.cjs && node tests/ai-preview.cjs && node tests/llm-settings.cjs && node tests/embedded-api.cjs"
+  },
   "devDependencies": {
     "@tailwindcss/cli": "^4.3.5",
     "daisyui": "^5.8.0",

@@ -10,6 +10,11 @@
   },
   "description": "Ultimate RC: original GUI and features, local Vietnamese/English OCR, Rust/WASM image kernels and background color matching.",
   "minimum_chrome_version": "116",
+  "options_page": "llm-settings.html",
+  "web_accessible_resources": [{
+    "resources": ["llm-settings.html", "llm-endpoint.js", "llm-settings.js", "llm-settings.css", "console.css"],
+    "matches": ["https://fsc-edunext.fpt.edu.vn/*"]
+  }],
   "permissions": [
     "storage",
     "unlimitedStorage",
@@ -34,6 +39,13 @@
     ]
   },
   "content_scripts": [
+    {
+      "matches": ["https://fsc-edunext.fpt.edu.vn/*"],
+      "js": ["auto-answer.js"],
+      "run_at": "document_idle",
+      "world": "ISOLATED",
+      "all_frames": false
+    },
     {
       "matches": [
         "https://fsc-edunext.fpt.edu.vn/*"

@@ -7,11 +7,11 @@
             button.className = 'sm ui-btn ui-btn-sm'; button.textContent = label;
             button.dataset.sizePreset = index;
             if (index === 1) button.id = 'rc-size-reset';
-            button.addEventListener('click', () => { setConsoleSize(width, height); save(); });
+            button.addEventListener('click', () => { setConsoleSize(width, height, true); save(); });
             sizeBar.append(button); return button;
         });
         const sizeReadout = document.createElement('span'); sizeReadout.className = 'console-size-readout';
-        sizeBar.append(sizeReadout); $('.hd').after(sizeBar);
+        sizeBar.append(sizeReadout); $('.ft').before(sizeBar);
         const grip = document.createElement('button'); grip.type = 'button'; grip.id = 'rc-size-grip';
         grip.className = 'ui-btn ui-btn-ghost console-size-grip';
         grip.setAttribute('aria-label', 'Đổi kích thước bảng');
@@ -23,7 +23,8 @@
         panel.append(grip, sizeHelp);
         let sizeDrag = null, sizeFrame = 0;
         const sizeLimits = () => ({width: Math.min(560, innerWidth - 32), height: Math.min(820, innerHeight - 96)});
-        const setConsoleSize = (width, height) => {
+        const setConsoleSize = (width, height, animate = false) => {
+            panel.classList.toggle('is-size-preset', animate);
             cfg.consoleWidth = Math.max(320, Math.min(560, Math.round(width)));
             cfg.consoleHeight = Math.max(420, Math.min(820, Math.round(height)));
             // Only update panel geometry while dragging; do not re-theme the page.
@@ -57,6 +58,7 @@
         grip.addEventListener('pointerdown', e => {
             if (e.button !== 0 || !e.isPrimary || sizeDrag) return;
             e.preventDefault(); grip.focus({preventScroll: true});
+            panel.classList.remove('is-size-preset');
             const rect = {width:panel.offsetWidth, height:panel.offsetHeight};
             sizeDrag = {pointerId:e.pointerId, startX:e.clientX, startY:e.clientY, x:e.clientX, y:e.clientY,
                 width:rect.width, height:rect.height, savedWidth:cfg.consoleWidth, savedHeight:cfg.consoleHeight};
@@ -75,7 +77,7 @@
         grip.addEventListener('pointercancel', () => finishSizeDrag(true));
         grip.addEventListener('lostpointercapture', () => finishSizeDrag(true));
         window.addEventListener('blur', () => finishSizeDrag(true));
-        window.addEventListener('resize', () => finishSizeDrag(true));
+        window.addEventListener('resize', () => { panel.classList.remove('is-size-preset'); finishSizeDrag(true); });
         // Register before the panel's Escape-to-close listener.
         window.addEventListener('keydown', e => {
             if (e.key === 'Escape' && sizeDrag) { e.preventDefault(); e.stopImmediatePropagation(); finishSizeDrag(true); }

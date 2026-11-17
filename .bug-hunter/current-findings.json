@@ -1,0 +1,11 @@
+{
+  "version": "3.0.0",
+  "confirmed": [
+    {"id":"BUG-1","severity":"MEDIUM","file":"source/Ultimate-RC-tools-5.14.txt","claim":"Delayed Enter submitted edited drafts","status":"FIXED"},
+    {"id":"BUG-2","severity":"MEDIUM","file":"source/Ultimate-RC-tools-5.14.txt","claim":"Last English OCR checkbox saved Vietnamese-only","status":"FIXED"},
+    {"id":"BUG-3","severity":"MEDIUM","file":"source/ocr-fidelity.js","claim":"Colored text became whole-line image placeholders","status":"FIXED"}
+  ],
+  "checksPassed": ["build","syntax","source-first","targeted regressions","enter-send","fidelity","question-text","BYOK baseline"],
+  "remaining": ["Endpoint suffix contract discrepancy", "Live-site/provider verification"],
+  "report": "report-current.md"
+}

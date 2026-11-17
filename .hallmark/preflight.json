@@ -1,0 +1,23 @@
+{
+  "scanned": "2026-11-16",
+  "findings": {
+    "fonts": "Segoe UI/system (source/console.css, original line 21)",
+    "palette": "Saved runtime palette tokens (source/dashboard-theme.js:45)",
+    "framework": "Chrome MV3, shadow DOM, Tailwind 4/daisyUI 5 (package.json:10)",
+    "motion": "Existing tab transform and panel transitions (source/console.css)"
+  },
+  "preserve": [
+    "all controls and handlers",
+    "saved palettes",
+    "light/dark/automatic modes",
+    "system font",
+    "existing uncommitted work"
+  ],
+  "introduce": [
+    "grouped responsive settings",
+    "horizontal palette index",
+    "flat color rows",
+    "shared design tokens",
+    "viewport-safe AI position"
+  ]
+}

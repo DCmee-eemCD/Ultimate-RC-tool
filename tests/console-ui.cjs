@@ -1,19 +1,20 @@
-const fs = require('node:fs/promises'), path = require('node:path'), assert = require('node:assert/strict');
-const {chromium} = require(process.env.RC_PLAYWRIGHT || '../.transfer/package');
+const path = require('node:path'), assert = require('node:assert/strict');
+const {ROOT: root, launchExtension} = require('./lib/browser.cjs');
 (async () => {
-    const root = path.resolve(__dirname, '..');
-    const profile = await fs.mkdtemp(path.join(root, '.transfer', 'console-ui-'));
-    const ctx = await chromium.launchPersistentContext(profile, {headless:true, viewport:{width:1280,height:900},
-        executablePath:process.env.RC_CHROME || path.join(root,'.transfer/chrome-win64/chrome.exe'),
-        args:['--disable-extensions-except='+path.join(root,'extension'),'--load-extension='+path.join(root,'extension')]});
+    const ctx = await launchExtension('console-ui', {viewport:{width:1280,height:900}});
     try {
         await ctx.route('https://fsc-edunext.fpt.edu.vn/**', r => r.fulfill({contentType:'text/html',body:'<html><body style="background:#e7ecf2"><div class="chat-messages"></div></body></html>'}));
         const p=await ctx.newPage(), errors=[]; p.on('pageerror',e=>errors.push(e.message));
         await p.goto('https://fsc-edunext.fpt.edu.vn/rc-console-test');
         await p.locator('#rc-kit #gear').click();
-        const dimensions=()=>p.locator('#rc-kit #panel').evaluate(e=>({width:parseFloat(getComputedStyle(e).width),height:parseFloat(getComputedStyle(e).height)}));
+        const dimensions=()=>p.locator('#rc-kit #panel').evaluate(async e=>{
+            getComputedStyle(e).width;
+            await Promise.all(e.getAnimations().map(a=>a.finished));
+            return {width:parseFloat(getComputedStyle(e).width),height:parseFloat(getComputedStyle(e).height)};
+        });
         assert.deepEqual(await dimensions(),{width:380,height:620});
         await p.locator('#rc-kit [data-size-preset="2"]').click();
+        assert.ok(await p.locator('#rc-kit #panel').evaluate(e=>e.getAnimations().some(a=>a.transitionProperty==='width')), 'size preset should animate the panel width');
         assert.deepEqual(await dimensions(),{width:560,height:804});
         await p.evaluate(()=>RC.flush()); await p.reload();await p.locator('#rc-kit #gear').click();
         assert.deepEqual(await dimensions(),{width:560,height:804});
@@ -51,6 +52,22 @@ const {chromium} = require(process.env.RC_PLAYWRIGHT || '../.transfer/package');
         await p.screenshot({path:path.join(root,'.transfer','console-custom-size.png'),animations:'disabled'});
         const tabs=p.locator('#rc-kit [role="tab"]'), body=p.locator('#rc-kit .body');
         assert.equal(await tabs.count(),4);
+        const slide = await p.locator('#rc-kit .tabs').evaluate(async strip => {
+            const x = () => new DOMMatrixReadOnly(getComputedStyle(strip, '::after').transform).m41;
+            const start = x();
+            const target = strip.querySelector('[data-tab="music"]');
+            target.click();
+            x(); // Resolve the new style so Chrome creates the CSS transition.
+            await new Promise(resolve => requestAnimationFrame(resolve));
+            const animations = strip.getAnimations({subtree:true});
+            const moving = animations.some(a => a.transitionProperty === 'transform');
+            await Promise.all(animations.map(a => a.finished));
+            return {start, end: x(), expected: target.offsetLeft + target.offsetWidth / 2 - 14, moving};
+        });
+        assert.ok(slide.moving, 'tab underline should animate between selections');
+        assert.ok(slide.end > slide.start, 'underline should slide toward the selected tab');
+        assert.ok(Math.abs(slide.end - slide.expected) < 1, 'underline should finish centered on the selected tab');
+        await tabs.nth(0).click();
         assert.equal(await p.locator('#rc-kit [role="tabpanel"]:visible').count(),1);
         await tabs.nth(0).focus(); await p.keyboard.press('ArrowRight');
         await p.keyboard.press('Enter');
@@ -62,7 +79,7 @@ const {chromium} = require(process.env.RC_PLAYWRIGHT || '../.transfer/package');
         await body.evaluate(e=>e.scrollTop=0);
         for(const mode of ['dark','light']) {
             await tabs.nth(0).click();
-            await p.locator('#rc-kit [data-k="imageThemeMode"]').selectOption(mode);
+            await p.locator('#rc-kit [data-theme-mode="'+mode+'"]').click();
             for(const key of ['theme','feat','ocr','music']) {
                 await p.locator('#rc-kit [data-tab="'+key+'"]').click();
                 await body.evaluate(e=>e.scrollTop=0);
@@ -71,6 +88,7 @@ const {chromium} = require(process.env.RC_PLAYWRIGHT || '../.transfer/package');
         }
         await p.emulateMedia({reducedMotion:'reduce'});
         await tabs.nth(0).click();
+        assert.equal(await p.locator('#rc-kit .tabs').evaluate(e=>getComputedStyle(e,'::after').transitionDuration),'0s');
         assert.equal(await p.locator('#rc-kit .sec.act').evaluate(e=>getComputedStyle(e).animationName),'none');
         await p.setViewportSize({width:360,height:640});
         const bounds=await p.locator('#rc-kit #panel').boundingBox();

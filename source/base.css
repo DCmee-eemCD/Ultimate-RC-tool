@@ -1,0 +1,12 @@
+/* Hallmark · scoped app foundations · v2.0.0 */
+html, body { overflow-x: clip; }
+.w { font-family: var(--font-body); }
+.w :is(button, input, select, textarea, kbd) { font-family: var(--font-body); }
+.w :is(h1, h2, h3, h4) { overflow-wrap: break-word; min-width: 0; text-wrap: balance; }
+.w :is(button, input, select, a, [tabindex]):focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; transition: none; }
+.w :is(button, input, select):disabled { opacity: .55; cursor: not-allowed; }
+.w button:active { filter: brightness(.92); }
+@media (prefers-reduced-motion: reduce) {
+  .w * { animation: none !important; }
+  .w *:not(#ai-panel), .w *::before, .w *::after { transition: none !important; }
+}

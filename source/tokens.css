@@ -1,0 +1,12 @@
+/* Hallmark · theme: Rim adapted to saved palettes · scope: app · v2.0.0 */
+:root, :host {
+  --font-body: "Segoe UI", system-ui, sans-serif;
+  --space-3xs: 2px; --space-2xs: 4px; --space-xs: 8px;
+  --space-sm: 12px; --space-md: 16px; --space-lg: 24px;
+  --space-xl: 32px; --space-2xl: 40px;
+  --rc-shadow: 0 12px 32px #0003, 0 2px 6px #0002;
+  --rc-shadow-small: 0 3px 10px #0002;
+  --rc-radius: 8px;
+  --ai-bg: #20212a; --ai-surface: #292b36; --ai-fg: #f3f4f6;
+  --ai-rule: #636674; --ai-accent: #a5b4fc; --ai-secondary: #c4b5fd; --ai-muted: #b9becb;
+}

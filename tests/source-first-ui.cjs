@@ -1,11 +1,7 @@
-const fs = require('node:fs/promises'), path = require('node:path'), assert = require('node:assert/strict');
-const {chromium} = require(process.env.RC_PLAYWRIGHT || '../.transfer/package');
+const path = require('node:path'), assert = require('node:assert/strict');
+const {ROOT: root, launchExtension} = require('./lib/browser.cjs');
 (async () => {
-    const root = path.resolve(__dirname, '..');
-    const profile = await fs.mkdtemp(path.join(root, '.transfer', 'source-first-'));
-    const ctx = await chromium.launchPersistentContext(profile, {headless: true,
-        executablePath: process.env.RC_CHROME || path.join(root, '.transfer/chrome-win64/chrome.exe'),
-        args: ['--disable-extensions-except=' + path.join(root, 'extension'), '--load-extension=' + path.join(root, 'extension')]});
+    const ctx = await launchExtension('source-first');
     try {
         await ctx.route('https://fsc-edunext.fpt.edu.vn/**', r => r.fulfill({contentType: 'text/html', body: '<html><body><div class="chat-messages"></div></body></html>'}));
         const p = await ctx.newPage();

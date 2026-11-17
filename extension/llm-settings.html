@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Cấu hình endpoint, model và khóa API cho trợ lý AI của Ultimate RC.">
+  <title>Cài đặt AI · Ultimate RC</title>
+  <link rel="stylesheet" href="console.css">
+  <link rel="stylesheet" href="llm-settings.css">
+</head>
+<body class="w">
+  <main class="settings-shell" aria-labelledby="page-title">
+    <section class="settings-card">
+      <header class="settings-header">
+        <h1 id="page-title">Cài đặt AI</h1>
+        <p class="brand-line">Ultimate RC</p>
+        <p id="form-intro" class="intro">Kết nối một API tương thích OpenAI để dùng các tính năng AI trong tiện ích.</p>
+      </header>
+
+      <form id="settings" method="post" action="llm-settings.html" autocomplete="off" novalidate aria-describedby="form-intro">
+        <fieldset class="settings-group">
+          <legend>Kết nối</legend>
+          <div class="group-fields">
+        <div class="field">
+          <label for="endpoint">Endpoint API <span class="optional">(tùy chọn)</span></label>
+          <p id="endpoint-help" class="field-help">Nhập endpoint của nhà cung cấp, gồm đường dẫn nếu có. Giữ nguyên địa chỉ khi lưu. Để trống để dùng OpenAI.</p>
+          <input id="endpoint" name="endpoint" class="ui-input" type="text" inputmode="url"
+            placeholder="api.groq.com hoặc https://…" autocomplete="url" autocorrect="off" autocapitalize="none" maxlength="2048" spellcheck="false"
+            aria-describedby="endpoint-help endpoint-error">
+          <p id="endpoint-error" class="field-error" role="alert" hidden></p>
+        </div>
+
+        <div class="field">
+          <label for="model">Model</label>
+          <p id="model-help" class="field-help">Nhập model ID do nhà cung cấp của bạn hỗ trợ.</p>
+          <input id="model" name="model" class="ui-input" type="text" placeholder="provider-model-id"
+            autocomplete="off" autocapitalize="none" maxlength="200" spellcheck="false" required aria-describedby="model-help model-error">
+          <p id="model-error" class="field-error" role="alert" hidden></p>
+        </div>
+          </div>
+        </fieldset>
+
+        <fieldset class="settings-group credentials-group">
+          <legend>Khóa truy cập</legend>
+        <div class="field">
+          <label for="key">API key <span class="optional">(tùy chọn)</span></label>
+          <div class="key-control">
+            <input id="key" name="key" class="ui-input" type="password" autocomplete="new-password" autocapitalize="none"
+              maxlength="4096" spellcheck="false" aria-describedby="key-help key-status key-error">
+            <button id="toggle-key" class="ui-btn ui-btn-ghost ui-btn-sm key-toggle" type="button"
+              aria-controls="key" aria-pressed="false">Hiện khóa</button>
+          </div>
+          <div class="key-meta">
+            <p id="key-status" class="key-status" role="status" aria-live="polite">Chưa lưu khóa API</p>
+            <button id="clear-key" class="ui-btn ui-btn-ghost ui-btn-sm" type="button">Xóa khóa</button>
+          </div>
+          <p id="key-help" class="field-help">Để trống để giữ khóa hiện tại khi vẫn dùng cùng Endpoint. Đổi nhà cung cấp cần nhập khóa mới.</p>
+          <p id="key-error" class="field-error" role="alert" hidden></p>
+        </div>
+        </fieldset>
+
+        <p class="disclosure">Câu hỏi sẽ được gửi đến nhà cung cấp được xác định bởi Endpoint; phí API có thể áp dụng theo tài khoản của bạn. Cấu hình chỉ lưu cục bộ trên thiết bị này.</p>
+
+        <div class="actions">
+          <button id="save" class="ui-btn ui-btn-sm save-button" type="submit">Lưu cấu hình</button>
+        </div>
+        <p id="status" class="status" role="status" aria-live="polite"></p>
+      </form>
+    </section>
+  </main>
+  <script src="llm-endpoint.js"></script>
+  <script src="llm-settings.js"></script>
+</body>
+</html>

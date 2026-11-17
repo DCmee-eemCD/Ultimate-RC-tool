@@ -1,15 +1,10 @@
-/* Run with RC_PLAYWRIGHT and RC_CHROME pointing to your test installations. */
+/* Browser setup (RC_PLAYWRIGHT, RC_CHROME): see tests/lib/browser.cjs. */
 const fs=require('node:fs/promises');
 const path=require('node:path');
 const assert=require('node:assert/strict');
-const {chromium}=require(process.env.RC_PLAYWRIGHT||'playwright');
-const root=path.resolve(__dirname,'..');
+const {ROOT: root, launchExtension} = require('./lib/browser.cjs');
 (async()=>{
-  const profile=await fs.mkdtemp(path.join(root,'.transfer','smoke-run-'));
-  const context=await chromium.launchPersistentContext(profile,{
-    executablePath:process.env.RC_CHROME,headless:true,
-    args:['--disable-extensions-except='+path.join(root,'extension'),'--load-extension='+path.join(root,'extension')]
-  });
+  const context=await launchExtension('smoke-run');
   const results=[];
   const check=(name,details)=>{results.push({name,details,status:'passed'});console.log('PASS',name,details||'');};
   try{
@@ -78,12 +73,15 @@ const root=path.resolve(__dirname,'..');
     assert.equal(await page.locator('#rc-kit input[data-k="sourceFirst"]').count(),1);
     assert.equal(await page.locator('#rc-kit input[data-k="wip"]').count(),1);
     await page.screenshot({path:path.join(root,'.transfer','gui.png'),animations:'disabled'});
-    check('Original three-tab GUI loads with strict page CSP');
-    await page.locator('#rc-kit [data-pre="1"]').click();
+    check('Four-tab GUI loads with strict page CSP');
+    // Select by name: inserting Discord Dark shifted the old numeric index.
+    await page.locator('#rc-kit').getByRole('button',{name:'Tối',exact:true}).click();
     await page.evaluate(()=>RC.flush());
+    assert.equal(await page.evaluate(()=>GM_getValue('chatKit').pageBg),'#0b1120');
     assert.equal(await page.locator('body').evaluate(e=>getComputedStyle(e).backgroundColor),'rgb(11, 17, 32)');
     await page.reload();await page.locator('#rc-kit #gear').waitFor();
     assert.equal(await page.evaluate(()=>GM_getValue('chatKit').primary),'#6366f1');
+    assert.equal(await page.locator('body').evaluate(e=>getComputedStyle(e).backgroundColor),'rgb(11, 17, 32)');
     check('Theme applied under CSP and persisted across reload');
     const input=page.locator('textarea');await input.fill('hello');await input.press('Enter');
     assert.equal(await page.evaluate(()=>sends),1);

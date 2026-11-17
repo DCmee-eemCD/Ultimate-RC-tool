@@ -1,0 +1,3 @@
+[
+  {"bugId":"PAGE-1","severity":"Medium","category":"data-integrity","file":"extension/app.js","lines":"975-982","claim":"Copy latest returns stale OCR after original text becomes available.","evidence":"recoverOriginals updates only the bubble; forceScan reads combinedFor(id) directly from textByUrl.","runtimeTrigger":"OCR finishes before original message content arrives; recovery displays original; right-click the OCR pill copies old OCR.","crossReferences":["source/text-source.js:36-46","scripts/transforms/source-first.mjs"],"confidenceScore":100,"stride":"N/A","cwe":"N/A"}
+]

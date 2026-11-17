@@ -1,0 +1,1 @@
+[{"bugId":"PAGE-1","response":"ACCEPT","analysisSummary":"The bubble Copy button uses corrected dataset.text, but the distinct pill context-menu copy path uses textByUrl. Reproduction executes actual source helpers and forceScan; displayed=Correct original while copied=Wrong OCR. The bubble-specific protection does not protect this path."}]

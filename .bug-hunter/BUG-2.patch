@@ -1,0 +1,5 @@
+--- a/source/Ultimate-RC-tools-5.14.txt
++++ b/source/Ultimate-RC-tools-5.14.txt
+@@ -1452,1 +1452,1 @@
+-            if ((k === 'ocrVie' || k === 'ocrEng') && !cfg.ocrVie && !cfg.ocrEng) { cfg.ocrVie = true; t.checked = true; if (k === 'ocrVie') { /* giữ lại tick */ } toast('Phải chọn ít nhất 1 ngôn ngữ'); }
++            if ((k === 'ocrVie' || k === 'ocrEng') && !cfg.ocrVie && !cfg.ocrEng) { cfg[k] = true; t.checked = true; toast('Phải chọn ít nhất 1 ngôn ngữ'); }

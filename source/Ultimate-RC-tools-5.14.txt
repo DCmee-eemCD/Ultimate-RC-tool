@@ -606,7 +606,8 @@
 
         // chỉ nhắm đúng .message-container (không dính các thẻ *-stack bọc ngoài)
         if (u) css += `
-            .message-container.message-user { background:${u} !important; ${uc ? `color:${uc} !important;` : ''} }`;
+            .message-container.message-user { background:${u} !important; ${uc ? `color:${uc} !important;` : ''} }
+            .message-container.message-user :is(p, span, li, td, th, strong, em, code, a) { background:transparent !important; ${uc ? `color:${uc} !important;` : ''} }`;
         if (b) css += `
             .message-container.message-assistant { background:${b} !important; ${bc ? `color:${bc} !important;` : ''} }`;
 
@@ -673,7 +674,14 @@
         css += `
             .chat-overlay { background-color:${pgBg} !important; }
             #lesson-sidebar, .w-chat-header, .chat-footer, .w-chat-input { background-color:${panel} !important; border-color:${line} !important; }
-            .w-chat-input__card { background-color:${panel2} !important; border-color:${line} !important; }
+            .w-chat-input__card, .w-chat-input__intent-panel { background-color:${panel2} !important; border-color:${line} !important; }
+            .w-chat-input .exercise-intent-column__item { background:transparent !important; border-color:transparent !important; }
+            .w-chat-input .exercise-intent-column__button { background:var(--intent-background, #e8efff) !important; border-color:transparent !important; }
+            .w-chat-input .exercise-intent-column__button,
+            .w-chat-input .exercise-intent-column__button :is(span, svg) { color:var(--intent-color, #2563eb) !important; }
+            .w-chat-input .exercise-intent-column__item:not(:disabled):is(:hover, :focus-visible, .is-active, [aria-pressed="true"]) { background:${actBg} !important; border-color:${p} !important; }
+            .w-chat-input .exercise-intent-column__item:focus-visible { outline:2px solid ${p} !important; outline-offset:2px; }
+            .w-chat-input .exercise-intent-column__item:disabled { opacity:0.5; }
             .w-lesson-item, .w-sidebar-btn, .w-filter-badge, .w-chat-input__tabs, .w-chat-header__tools,
             .message-font-size-button { background-color:${panel2} !important; border-color:${line} !important; }
             .w-lesson-item__index { background-color:${line} !important; }
@@ -700,6 +708,12 @@
             :root { --bs-primary:${p}; --bs-primary-rgb:${rgb}; }
             html, body { background-color:${pgBg} !important; color:${pgc} !important; }
             .left-navigation { background-color:${pgBg} !important; border-color:${line} !important; }
+            /* Sidebar text and hover states follow the active theme palette. */
+            html body .left-navigation .ps-menu-button,
+            html body .left-navigation .ps-menu-button :is(span, a, svg) { color:${pgc} !important; }
+            html body .left-navigation .ps-menu-button:is(:hover, :focus-visible, [aria-expanded="true"]),
+            html body .left-navigation .ps-menu-button:is(:hover, :focus-visible, [aria-expanded="true"]) :is(span, a, svg) { color:${accTxt} !important; }
+            html body .left-navigation .ps-menu-button:is(:hover, :focus-visible, [aria-expanded="true"]) { background-color:${actBg} !important; }
             .cl-card, .cl-semester-nav, .cl-toolbar__search-input, .cl-header__right button,
             .MuiPaper-root, .dropdown-menu, .modal-content, .ant-modal-content, .ant-card, .ant-dropdown-menu
                 { background:${panel} !important; background-color:${panel} !important; border-color:${line} !important; }
@@ -752,7 +766,7 @@
             html body .chat-window, html body .chat-body, html body .chat-content, html body .chat-messages { background:transparent !important; }
             html body #lesson-sidebar > div:first-child, html body .w-chat-header, html body .chat-footer, html body .w-chat-input
                 { background:${rgba(panel, Math.max(0.1, A - 0.2))} !important; }
-            html body .w-chat-input__card, html body .w-lesson-item, html body .w-sidebar-btn, html body .w-filter-badge, html body .w-chat-input__tabs,
+            html body .w-chat-input__card, html body .w-chat-input__intent-panel, html body .w-lesson-item, html body .w-sidebar-btn, html body .w-filter-badge, html body .w-chat-input__tabs,
             html body .w-chat-header__tools
                 { background:${inner} !important; }
             html body .message-container.message-user { background:${bub(u)} !important; }
@@ -777,41 +791,54 @@
     const ENTER_SEL = 'textarea.w-md-editor-text-input, .w-chat-input textarea, .w-chat-input math-field';
     const valueOf = t => String((t && t.value) || '');
     let enterHandledAt = 0;
+    let enterHandledTarget = null;
+    let enterAttempt = 0;
     // Chat thường có nút .w-send-btn. Chế độ bài tập KHÔNG có nút đó mà có cột ý định (.exercise-intent-column__item):
     // mặc định bấm nút đang được chọn của trang (vd. "Yêu cầu khác"); đặt exerciseIntent='submit' để luôn "Nộp câu trả lời".
     function findSendTarget(t) {
-        const scope = (t.closest && t.closest('.w-chat-input')) || document;
-        const send = scope.querySelector('button.w-send-btn') || document.querySelector('button.w-send-btn');
+        const scope = t.closest('.w-chat-input, .chat-window, .chat-popup') || t.parentElement;
+        if (!scope) return null;
+        const send = scope.querySelector('button.w-send-btn');
         if (send) return send;
-        const items = [...document.querySelectorAll('.exercise-intent-column__item')];
+        const items = [...scope.querySelectorAll('.exercise-intent-column__item, button[data-intent]')];
         if (!items.length) return null;
-        const submit = items.find(b => /^Nộp câu trả lời/i.test(b.getAttribute('aria-label') || b.textContent || ''));
+        const submit = items.find(b => b.getAttribute('data-intent') === 'SUBMIT_ANSWER') ||
+            items.find(b => /^Nộp câu trả lời/i.test(b.getAttribute('aria-label') || b.textContent || ''));
         const active = items.find(b => b.classList.contains('is-active') || b.getAttribute('aria-pressed') === 'true');
         return cfg.exerciseIntent === 'submit' ? (submit || active) : (active || submit);
     }
     function onEnterKey(e) {
+        const attempt = ++enterAttempt;
+        enterHandledAt = 0;
+        enterHandledTarget = null;
         if (!cfg.enterSend || e.key !== 'Enter') return;
         if (e.shiftKey || e.ctrlKey || e.altKey || e.metaKey) return;   // Shift+Enter: để mặc định (xuống dòng)
-        if (e.isComposing) return;                                      // đang gõ dở trong IME: Enter chỉ chốt chữ
+        if (e.isComposing || e.keyCode === 229) return;                  // đang gõ dở trong IME: Enter chỉ chốt chữ
         const t = e.target;
         if (!t || !t.matches || !t.matches(ENTER_SEL)) return;
-        if (!findSendTarget(t)) return;   // không có nút nào để bấm → KHÔNG nuốt phím, để trang tự xử lý
+        const requestedTarget = findSendTarget(t);
+        const requestedDraft = valueOf(t);
+        if (!requestedTarget) return;   // không có nút nào để bấm → KHÔNG nuốt phím, để trang tự xử lý
         e.preventDefault();
         e.stopImmediatePropagation();
         enterHandledAt = Date.now();
+        enterHandledTarget = t;
         // React có thể chưa kịp bật nút → tìm lại mỗi lần thử
         const trySend = n => {
+            if (!cfg.enterSend || !t.isConnected || attempt !== enterAttempt || valueOf(t) !== requestedDraft) return;
             const btn = findSendTarget(t);
+            if (btn !== requestedTarget) return;
             log('Enter → gửi', { mode: t.tagName.toLowerCase(), btn: btn ? (btn.getAttribute('aria-label') || btn.className).slice(0, 40) : null, disabled: !!(btn && btn.disabled), len: valueOf(t).length });
-            if (btn && !btn.disabled) btn.click();
+            if (btn && !btn.disabled && btn.getAttribute('aria-disabled') !== 'true') btn.click();
             else if (n > 0 && valueOf(t).trim()) setTimeout(() => trySend(n - 1), 80);
         };
         trySend(4);
     }
     window.addEventListener('keydown', onEnterKey, true);
+    window.addEventListener('input', e => { if (e.target?.matches?.(ENTER_SEL)) enterAttempt++; }, true);
     // chặn nốt keypress/beforeinput xuống dòng ngay sau khi đã gửi (phòng trang chèn \n bằng đường khác)
     const swallowEnter = e => {
-        if (cfg.enterSend && Date.now() - enterHandledAt < 200) { e.preventDefault(); e.stopImmediatePropagation(); }
+        if (cfg.enterSend && e.target === enterHandledTarget && !e.shiftKey && !e.isComposing && Date.now() - enterHandledAt < 200) { e.preventDefault(); e.stopImmediatePropagation(); }
     };
     window.addEventListener('keypress', e => { if (e.key === 'Enter') swallowEnter(e); }, true);
     window.addEventListener('beforeinput', e => {
@@ -1042,15 +1069,18 @@
         const lines = String(text).split('\n');
         const out = []; let cur = []; let i = 0;
         const flushText = () => { const t = cur.join('\n').replace(/^\n+|\n+$/g, ''); if (t.trim()) out.push({ q: false, t }); cur = []; };
-        const isEnd = l => /^\s*(Bạn|Em|Các bạn|Hãy)\b.*(trả lời|viết|điền|nhập).*(định dạng|mẫu|như sau|sau đây|sau nhé|sau:)/i.test(l) || /^\s*Trả lời\s*:/i.test(l);
+        const folded = l => l.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/gi, 'd');
+        const heading = l => /^\s*(C[aâ]u\s+h[oỏ]i|Questiong?)\s*(?::\s*(.*)|$)/i.exec(l);
+        const isEnd = l => /^\s*(Ban|Em|Cac ban|Hay)\b.*(tra loi|viet|dien|nhap).*(dinh dang|mau|nhu sau|sau day|sau nhe|sau:)/i.test(folded(l)) || /^\s*(Tra loi|Answer)\s*:/i.test(folded(l)) || /^\s*(?:Please\s+)?(?:answer|respond|reply)\b.*\b(?:format|pattern|template|following)\b/i.test(l);
         while (i < lines.length) {
-            const m = /^\s*Câu hỏi\s*:?\s*(.*)$/i.exec(lines[i]);
+            const m = heading(lines[i]);
             if (!m) { cur.push(lines[i++]); continue; }
             flushText();
-            const body = m[1] ? [m[1]] : []; i++;
-            while (i < lines.length && !isEnd(lines[i])) body.push(lines[i++]);
+            const label = /^question/i.test(m[1]) ? 'Question' : 'Câu hỏi';
+            const body = m[2] ? [m[2]] : []; i++;
+            while (i < lines.length && !isEnd(lines[i]) && !heading(lines[i])) body.push(lines[i++]);
             const bt = body.join('\n').replace(/^\s*\n+|\n+\s*$/g, '').replace(/\n{3,}/g, '\n\n').replace(/([^.?!:;\n])\n(?=[a-zà-ỹ])/g, '$1 ');   // nối dòng bị OCR ngắt giữa câu (dòng sau bắt đầu bằng chữ thường)
-            if (bt.trim()) out.push({ q: true, t: bt }); else cur.push('Câu hỏi:');
+            if (bt.trim()) out.push({ q: true, t: bt, label }); else cur.push(lines[i - 1]);
         }
         flushText();
         return out;
@@ -1061,7 +1091,7 @@
             const d = document.createElement('div');
             if (pt.q) {
                 d.className = 'rc-qbox';
-                const l = document.createElement('div'); l.className = 'rc-qlab'; l.textContent = 'Câu hỏi';
+                const l = document.createElement('div'); l.className = 'rc-qlab'; l.textContent = pt.label || 'Câu hỏi';
                 const b = document.createElement('div'); b.className = 'rc-qbody'; b.textContent = pt.t;
                 d.append(l, b);
             } else { d.className = 'rc-seg-text'; d.textContent = pt.t; }
@@ -1382,7 +1412,7 @@ kbd{background:var(--chip);border:1px solid var(--line);border-radius:5px;paddin
       </div>
       <div class="sec" data-sec="ocr">
         ${TOGGLES.filter(t => OCR_KEYS.includes(t[0])).map(tgHtml).join('')}
-        <h4 class="mt">Động cơ OCR</h4>
+        <h4 class="mt">OCR engine</h4>
         <div class="fld"><span>Ngôn ngữ đọc</span><span class="inl"><label class="chk"><input type="checkbox" data-k="ocrVie" ${cfg.ocrVie !== false ? 'checked' : ''}>Tiếng Việt</label><label class="chk"><input type="checkbox" data-k="ocrEng" ${cfg.ocrEng !== false ? 'checked' : ''}>English</label></span></div>
         <div class="fld"><span>Luồng song song</span>
           <select data-k="ocrThreads">${[[0, 'Tự động (CPU − 1)'], [1, '1'], [2, '2'], [3, '3'], [4, '4'], [6, '6'], [8, '8']].map(([v, l]) => `<option value="${v}" ${+cfg.ocrThreads === v ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
@@ -1425,7 +1455,7 @@ kbd{background:var(--chip);border:1px solid var(--line);border-radius:5px;paddin
             else if (t.type === 'range') cfg[k] = +t.value;
             else if (t.tagName === 'SELECT' && /^\d+$/.test(t.value)) cfg[k] = +t.value;
             else cfg[k] = t.value;
-            if ((k === 'ocrVie' || k === 'ocrEng') && !cfg.ocrVie && !cfg.ocrEng) { cfg.ocrVie = true; t.checked = true; if (k === 'ocrVie') { /* giữ lại tick */ } toast('Phải chọn ít nhất 1 ngôn ngữ'); }
+            if ((k === 'ocrVie' || k === 'ocrEng') && !cfg.ocrVie && !cfg.ocrEng) { cfg[k] = true; t.checked = true; toast('Phải chọn ít nhất 1 ngôn ngữ'); }
             if (k === 'fontSize') $('#fsv').textContent = cfg.fontSize + 'px';
             save(); applyTheme(); try { render(); } catch (_) {}
             if (k === 'wip' && cfg.wip) forceScan();
@@ -1476,7 +1506,7 @@ kbd{background:var(--chip);border:1px solid var(--line);border-radius:5px;paddin
         $('#rk-close')?.addEventListener('click', () => togglePanel(false));
         window.addEventListener('keydown', e => {
             if (e.altKey && !e.ctrlKey && !e.metaKey && e.code === 'KeyC') { e.preventDefault(); togglePanel(); }
-            else if (e.key === 'Escape' && panel.classList.contains('open')) togglePanel(false);
+            else if (e.key === 'Escape' && panel.classList.contains('open') && !document.querySelector('.rc-answer-host')?.shadowRoot?.querySelector('#ai-panel')?.matches(':popover-open')) togglePanel(false);
         }, true);
 
         // trạng thái WIP + tiến độ quét
