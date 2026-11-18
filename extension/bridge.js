@@ -47,6 +47,7 @@
     try{
       let result;
       switch(m.op){
+        case 'updates-open': result=await background({op:'updates-open'});break;
         case 'palette': {
           if(!(m.pixels instanceof Uint8ClampedArray) || m.pixels.length>48*48*4 || m.pixels.length%4)throw new Error('Invalid palette pixels');
           result=await background({op:'palette',pixels:Array.from(m.pixels)});break;

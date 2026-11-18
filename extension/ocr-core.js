@@ -4,7 +4,7 @@ globalThis.RCOcrReady = (async function () {
     RC.pixelBackend = kernels ? "rust" : "javascript";
     'use strict';
 
-    const HUB_VER = '2.0.0';   // tab hub chạy sẵn KHÔNG tự nạp lại script → khác phiên bản thì phải đóng rồi mở hub mới
+    const HUB_VER = '2.1.0';   // tab hub chạy sẵn KHÔNG tự nạp lại script → khác phiên bản thì phải đóng rồi mở hub mới
     const log = (...a) => console.log('%c[RC]', 'color:#f59e0b', ...a);
 // Repair only recognizable English pronoun contexts, never arbitrary bars.
     function repairOcrText(text) {
@@ -14,6 +14,53 @@ globalThis.RCOcrReady = (async function () {
     // Keep colored glyphs from becoming invented OCR characters (for example
     // a flame emoji read as "@"). Ordinary words remain selectable text;
     // only the unsupported colored component is copied from the source image.
+    let emojiSamples;
+    function emojiSignature(canvas) {
+        const { data } = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height);
+        const points = [];
+        let left = canvas.width, top = canvas.height, right = 0, bottom = 0;
+        for (let y = 0; y < canvas.height; y++) for (let x = 0; x < canvas.width; x++) {
+            const i = (y * canvas.width + x) * 4;
+            const rgb = Array.from(data.slice(i, i + 3));
+            if (data[i + 3] < 128 || Math.max(...rgb) - Math.min(...rgb) <= 65) continue;
+            points.push([x, y, ...rgb]);
+            left = Math.min(left, x); right = Math.max(right, x);
+            top = Math.min(top, y); bottom = Math.max(bottom, y);
+        }
+        if (points.length < 6) return null;
+        const bins = new Float64Array(256);
+        for (const [x, y, r, g, b] of points) {
+            const i = (Math.floor((y - top) * 8 / (bottom - top + 1)) * 8
+                + Math.floor((x - left) * 8 / (right - left + 1))) * 4;
+            bins[i] += r / 255; bins[i + 1] += g / 255; bins[i + 2] += b / 255; bins[i + 3]++;
+        }
+        for (let i = 0; i < bins.length; i += 4) if (bins[i + 3]) {
+            bins[i] /= bins[i + 3]; bins[i + 1] /= bins[i + 3]; bins[i + 2] /= bins[i + 3]; bins[i + 3] = 1;
+        }
+        return bins;
+    }
+    function recognizeEmoji(canvas) {
+        const input = emojiSignature(canvas);
+        if (!input) return null;
+        if (!emojiSamples) {
+            emojiSamples = [];
+            for (const text of ['💡', '🔥', '💪', '👍', '👎', '👏', '🙏', '👉', '👇', '✅', '❌', '❗', '❓', '⚠️', '⭐', '✨', '🎉', '🎯', '📌', '📚', '📝', '😊', '😀', '😂', '🤔', '❤️', '💯', '🚀']) {
+                const sample = document.createElement('canvas');
+                sample.width = sample.height = 64;
+                const ctx = sample.getContext('2d');
+                ctx.font = '40px "Segoe UI Emoji", "Noto Color Emoji", sans-serif';
+                ctx.textBaseline = 'top';
+                ctx.fillText(text, 8, 8);
+                const signature = emojiSignature(sample);
+                if (signature) emojiSamples.push({ text, signature });
+            }
+        }
+        const ranked = emojiSamples.map(({ text, signature }) => ({ text,
+            error: input.reduce((sum, value, i) => sum + Math.abs(value - signature[i]), 0) / input.length,
+        })).sort((a, b) => a.error - b.error);
+        return ranked[0]?.error < 0.18 && (!ranked[1] || ranked[1].error - ranked[0].error > 0.025)
+            ? ranked[0].text : null;
+    }
     function protectGlyphs(data, orig, scale) {
         const ctx = orig.getContext('2d', { willReadFrequently: true });
         const W = orig.width, H = orig.height;
@@ -29,6 +76,8 @@ globalThis.RCOcrReady = (async function () {
             const icon = document.createElement('canvas');
             icon.width = x1 - x0; icon.height = y1 - y0;
             icon.getContext('2d').drawImage(orig, x0, y0, icon.width, icon.height, 0, 0, icon.width, icon.height);
+            const emoji = recognizeEmoji(icon);
+            if (emoji) return { x: x0, type: 'text', text: emoji };
             return { x: x0, type: 'icon', src: icon.toDataURL('image/png'), w: icon.width / scale, h: icon.height / scale };
         };
         for (const b of data.blocks || []) for (const p of b.paragraphs || []) for (const l of p.lines || []) {
@@ -54,13 +103,16 @@ globalThis.RCOcrReady = (async function () {
             const text = l.text || '';
             const color = colored >= 12 * scale * scale;
             if (!color) continue;
-            const ranges = [];
+            let ranges = [];
             for (let x = 0; x < W; x++) if (columns[x] >= scale) {
                 const last = ranges[ranges.length - 1];
                 if (last && x - last.x1 <= 10 * scale) last.x1 = x;
                 else ranges.push({ x0: x, x1: x });
             }
-            if (!ranges.length || ranges.some(r => r.x1 - r.x0 > 48 * scale) || !l.words?.length) {
+            // A colored heading is not a glyph, but must not disable recovery
+            // of a separate emoji elsewhere on the same line.
+            ranges = ranges.filter(r => r.x1 - r.x0 <= 48 * scale);
+            if (!ranges.length || !l.words?.length) {
                 continue;
             }
             const words = l.words.filter(w => w.bbox).slice().sort((a, b) => a.bbox.x0 - b.bbox.x0);
@@ -91,11 +143,26 @@ globalThis.RCOcrReady = (async function () {
                     Math.min(ranges[i].x1, word.bbox.x1) - Math.max(ranges[i].x0, word.bbox.x0)), 0);
                 const wordWidth = Math.max(1, word.bbox.x1 - word.bbox.x0);
                 const glyphToken = Array.from(String(word.text || '').trim()).length <= 2 && overlap >= wordWidth * 0.35;
-                if (overlaps.length && (glyphNoise(word.text) || glyphToken)) overlaps.forEach(addIcon);
-                else addText(word.text);
+                if (/\p{Emoji_Presentation}|\p{Extended_Pictographic}\uFE0F/u.test(word.text || '')) {
+                    overlaps.forEach(i => used.add(i));
+                    addText(word.text);
+                } else if (overlaps.length && glyphNoise(word.text)) overlaps.forEach(addIcon);
+                else if (glyphToken && overlaps.length && overlaps.every(i => !used.has(i))) {
+                    const candidates = overlaps.map(i => iconPart(ranges[i], y0, y1));
+                    overlaps.forEach(i => used.add(i));
+                    // Short colored words ("Go", "a", "2") are still words.
+                    // Replace letter-like OCR only when the pixels match an emoji.
+                    if (candidates.every(part => part.type === 'text')) parts.push(...candidates);
+                    else addText(word.text);
+                } else {
+                    // These pixels belong to selectable text already emitted.
+                    // Do not append them again as an unclaimed inline image.
+                    overlaps.forEach(i => used.add(i));
+                    addText(word.text);
+                }
             }
             for (let i = nextRange; i < ranges.length; i++) addIcon(i);
-            if (!parts.some(part => part.type === 'icon') || !parts.some(part => part.type === 'text')) {
+            if (!used.size || !parts.some(part => part.type === 'text')) {
                 continue;
             }
             l.rcVisual = {

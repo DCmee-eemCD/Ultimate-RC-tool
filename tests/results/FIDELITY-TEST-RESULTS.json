@@ -1,13 +1,13 @@
 {
   "sourceTests": "passed",
   "rendered": {
-    "ocrImages": 4,
-    "copiedOcr": "[emoji/ký hiệu trong ảnh] Chúc mừng em hoàn thành buổi học!\n\n[emoji/ký hiệu trong ảnh] Kỷ lục chuỗi đúng liên tiếp: 5 câu\n\n[emoji/ký hiệu trong ảnh] Điểm mạnh\n\nNormal plain text remains selectable.\n\nHẹn gặp em ở buổi học tiếp theo! [emoji/ký hiệu trong ảnh]",
+    "ocrImages": 0,
+    "copiedOcr": "🎉 Chúc mừng em hoàn thành buổi học!\n\n🔥 Kỷ lục chuỗi đúng liên tiếp: 5 câu\n\n💪 Điểm mạnh\n\nNormal plain text remains selectable. 💡\n\nHẹn gặp em ở buổi học tiếp theo! 💪",
     "copiedSource": "🎉 Chúc mừng! S_q = πR²; C = 2πR. 💪",
     "sourceImages": 0
   },
-  "one": "[emoji/ký hiệu trong ảnh] Chúc mừng em hoàn thành buổi học!\n\n[emoji/ký hiệu trong ảnh] Kỷ lục chuỗi đúng liên tiếp: 5 câu\n\n[emoji/ký hiệu trong ảnh] Điểm mạnh\n\nNormal plain text remains selectable.\n\nHẹn gặp em ở buổi học tiếp theo! [emoji/ký hiệu trong ảnh]",
-  "two": "[emoji/ký hiệu trong ảnh] Chúc mừng em hoàn thành buổi học!\n\n[emoji/ký hiệu trong ảnh] Kỷ lục chuỗi đúng liên tiếp: 5 câu\n\n[emoji/ký hiệu trong ảnh] Điểm mạnh\n\nNormal plain text remains selectable.\n\nHẹn gặp em ở buổi học tiếp theo! [emoji/ký hiệu trong ảnh]",
+  "one": "🎉 Chúc mừng em hoàn thành buổi học!\n\n🔥 Kỷ lục chuỗi đúng liên tiếp: 5 câu\n\n💪 Điểm mạnh\n\nNormal plain text remains selectable. 💡\n\nHẹn gặp em ở buổi học tiếp theo! 💪",
+  "two": "🎉 Chúc mừng em hoàn thành buổi học!\n\n🔥 Kỷ lục chuỗi đúng liên tiếp: 5 câu\n\n💪 Điểm mạnh\n\nNormal plain text remains selectable. 💡\n\nHẹn gặp em ở buổi học tiếp theo! 💪",
   "formula": "Formulaone:S=A +B\nFormulatwo:C=D +E\n\nFormula three:x=y+ 1\n\nFormula text stays selectable.",
   "diagram": [
     {

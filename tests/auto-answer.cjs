@@ -270,7 +270,36 @@ async function main() {
     assert.equal(await page.evaluate(() => __rcFixture.submits), 3, 'provider failure must not submit');
     assert.equal(await editor.inputValue(), '');
 
-    console.log('PASS: auto-answer submits initial and changed questions automatically, deduplicates successes, retries only after resume, and guards drafts, stale results, cancellation, manual errors, hints, and provider failures.');
+    // A repeated question with new hints is a new answer context.
+    await setMode('answer');
+    await setQuestion('Retry with hints');
+    await answer.click();
+    await waitFor(async () => (await page.evaluate(() => __rcFixture.submits)) === 4, 'answer before hint');
+    await page.evaluate(() => {
+      const message = document.querySelector('.message-assistant');
+      const hint = document.createElement('p');
+      hint.id = 'retry-hint';
+      hint.textContent = 'Gợi ý 1: Xét cả nghiệm âm. Gợi ý 2: Kiểm tra lại kết quả.';
+      message.append(hint);
+    });
+    await auto.click();
+    await waitFor(async () => (await calls()).length === 11, 'automatic retry with hints');
+    assert.match((await calls()).at(-1), /Gợi ý 1: Xét cả nghiệm âm/);
+    assert.match((await calls()).at(-1), /Gợi ý 2: Kiểm tra lại kết quả/);
+    await waitFor(async () => (await page.evaluate(() => __rcFixture.submits)) === 5, 'hint retry submit');
+    await pause(1800);
+    assert.equal((await calls()).length, 11, 'unchanged hints must not trigger duplicate requests');
+    await auto.click();
+    await setMode('pending');
+    await page.locator('#retry-hint').evaluate(el => { el.textContent = 'Hint: Try factoring.'; });
+    await answer.click();
+    await waitFor(async () => (await calls()).length === 12, 'pending hint request');
+    await page.locator('#retry-hint').evaluate(el => { el.textContent = 'Hint: Check both factors.'; });
+    await resolvePending();
+    await waitFor(async () => !(await answer.isDisabled()), 'changed hint cleanup');
+    assert.equal(await page.evaluate(() => __rcFixture.submits), 5, 'changed hints invalidate pending answers');
+    assert.equal(await editor.inputValue(), '');
+    console.log('PASS: automatic answers, multiple retry hints, hint deduplication, stale hints, drafts, cancellation and provider failures.');
   } finally {
     await context.close();
   }

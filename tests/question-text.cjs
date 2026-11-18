@@ -13,7 +13,7 @@ for(const r of result){
   for(const s of r.segments.filter(s=>s.type!=='text')){
     assert.equal(s.type,'rich');
     assert.ok(s.parts.some(p=>p.type==='text'&&p.text.trim()),'inline glyph lines retain selectable words');
-    assert.ok(s.parts.some(p=>p.type==='icon'),'rich segments represent inline glyphs');
+    assert.ok(s.parts.some(p=>p.type==='icon'||(p.type==='text'&&/\p{Extended_Pictographic}/u.test(p.text))),'rich segments preserve glyphs as Unicode or inline images');
   }
 }
 const app=fs.readFileSync(path.join(root,'extension/app.js'),'utf8');const code=app.slice(app.indexOf('    function splitQuestionBoxes('),app.indexOf('    function applyToContainer('));

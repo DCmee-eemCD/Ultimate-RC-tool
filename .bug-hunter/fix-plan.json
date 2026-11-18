@@ -1,37 +1,22 @@
 {
-  "generatedAt": "2026-11-17T11:07:44.533Z",
-  "confidenceThreshold": 75,
-  "canarySize": 1,
-  "totals": {
-    "findings": 1,
-    "eligible": 1,
-    "canary": 1,
-    "rollout": 0,
-    "manualReview": 0
-  },
-  "canary": [
-    {
-      "bugId": "PAGE-1",
-      "severity": "Medium",
-      "category": "data-integrity",
-      "file": "extension/app.js",
-      "lines": "975-982",
-      "claim": "Copy latest returns stale OCR after original text becomes available.",
-      "evidence": "recoverOriginals updates only the bubble; forceScan reads combinedFor(id) directly from textByUrl.",
-      "runtimeTrigger": "OCR finishes before original message content arrives; recovery displays original; right-click the OCR pill copies old OCR.",
-      "crossReferences": [
-        "source/text-source.js:36-46",
-        "scripts/transforms/source-first.mjs"
-      ],
-      "confidenceScore": 100,
-      "stride": "N/A",
-      "cwe": "N/A",
-      "strategy": "safe-autofix",
-      "executionStage": "canary",
-      "autofixEligible": true,
-      "reason": "Refresh current originals for the target group's URLs before the cached copy fast path, preserving non-placeholder image segments."
-    }
+  "files": [
+    "source/ocr-fidelity.js"
   ],
-  "rollout": [],
-  "manualReview": []
+  "generated": [
+    "extension/ocr-core.js",
+    "extension/ocr-engine.js"
+  ],
+  "sequence": [
+    "OCR-1",
+    "OCR-2",
+    "OCR-3"
+  ],
+  "verification": [
+    "node tests/ocr-glyphs.cjs",
+    "node tests/fidelity.cjs",
+    "node tests/question-text.cjs",
+    "npm run build",
+    "npm run check",
+    "node tests/smoke.cjs"
+  ]
 }

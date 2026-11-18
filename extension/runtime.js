@@ -37,6 +37,7 @@
   RC.palette=pixels=>call('palette',{pixels}).then(r=>{RC.paletteBackend=r.backend;return r.colors;});
   RC.ocr=options=>call('ocr',options);
   RC.ocrStop=()=>call('ocr-stop');
+  RC.openUpdates=()=>call('updates-open');
   RC.themeImport=(theme,video)=>write('theme-import',{theme,video});
   window.unsafeWindow=window;
   window.GM_getValue=(key,fallback)=>Object.hasOwn(cache,key)?structuredClone(cache[key]):fallback;

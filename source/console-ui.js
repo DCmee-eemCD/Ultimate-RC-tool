@@ -4,6 +4,59 @@
             ocr: ['Văn bản', 'Văn bản', 'Cài đặt sao chép văn bản và nhận dạng chữ trong ảnh.', '<path d="M5 4h14M12 4v16M8 20h8"/>'],
             music: ['Nhạc', 'Nhạc', 'Chọn và phát nhạc.', '<path d="M9 18V5l12-2v13M9 9l12-2"/><ellipse cx="6" cy="18" rx="3" ry="3"/><ellipse cx="18" cy="16" rx="3" ry="3"/>']
         };
+        // Music is a companion panel, alongside the Assistant launcher.
+        $('[data-tab="music"]').remove();
+        const musicSettings = $('[data-sec="music"]');
+        musicSettings.className = 'music-settings';
+        musicSettings.removeAttribute('data-sec');
+        musicSettings.id = 'rc-music-settings';
+        musicSettings.setAttribute('data-rc-panel', 'music');
+        musicSettings.setAttribute('popover', 'manual');
+        musicSettings.setAttribute('aria-label', 'Nhạc');
+        const musicIcon = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-eighth-notes preview-icon" aria-hidden="true"><path d="M21 16V3a1 1 0 0 0-1.28-.96l-10 2.917a1 1 0 0 0-.72.96V19"/><circle cx="18" cy="16" r="3"/><circle cx="6" cy="19" r="3"/></svg>';
+        const musicToggle = document.createElement('button');
+        musicToggle.id = 'rc-music-toggle'; musicToggle.type = 'button'; musicToggle.className = 'ui-btn';
+        musicToggle.setAttribute('data-rc-launcher', '1');
+        musicToggle.innerHTML = musicIcon; musicToggle.title = 'Nhạc';
+        musicToggle.setAttribute('aria-label', 'Mở bảng nhạc');
+        musicToggle.setAttribute('aria-controls', musicSettings.id);
+        musicToggle.setAttribute('aria-expanded', 'false');
+        const musicHeader = document.createElement('header'); musicHeader.className = 'music-heading';
+        musicHeader.innerHTML = musicIcon + '<h2>Nhạc</h2>';
+        const musicDismiss = document.createElement('button');
+        musicDismiss.type = 'button'; musicDismiss.className = 'ui-btn ui-btn-ghost';
+        musicDismiss.textContent = '×'; musicDismiss.setAttribute('aria-label', 'Đóng bảng nhạc');
+        musicHeader.append(musicDismiss); musicSettings.prepend(musicHeader);
+        $('#rc-music-url').setAttribute('aria-label', 'Link YouTube / Spotify');
+        $('.w').append(musicToggle, musicSettings);
+        const closeMusicSettings = (focus = true) => {
+            if (musicSettings.matches(':popover-open')) musicSettings.hidePopover();
+            musicSettings.hidden = true; musicToggle.setAttribute('aria-expanded', 'false');
+            musicToggle.hidden = !panel.classList.contains('open');
+            layoutCompanions();
+            if (focus) musicToggle.focus({preventScroll:true});
+        };
+        const positionMusic = () => {
+            const shown = panel.classList.contains('open'); musicToggle.hidden = !shown || !musicSettings.hidden;
+            if (!shown) closeMusicSettings(false);
+            layoutCompanions();
+        };
+        musicToggle.addEventListener('click', () => {
+            if (musicSettings.matches(':popover-open')) return closeMusicSettings();
+            musicSettings.hidden = false; positionMusic(); musicSettings.showPopover();
+            musicToggle.setAttribute('aria-expanded', 'true'); musicDismiss.focus({preventScroll:true});
+        });
+        musicDismiss.addEventListener('click', () => closeMusicSettings());
+        window.addEventListener('keydown', event => {
+            if (event.key === 'Escape' && musicSettings.matches(':popover-open')) {
+                event.preventDefault(); event.stopImmediatePropagation(); closeMusicSettings();
+            }
+        }, true);
+        new ResizeObserver(positionMusic).observe(panel);
+        panel.addEventListener('animationend', positionMusic);
+        panel.addEventListener('transitionend', positionMusic);
+        new MutationObserver(positionMusic).observe(panel, {attributes:true, attributeFilter:['class','style']});
+        window.addEventListener('resize', positionMusic); positionMusic();
         const tablist = $('.tabs'), tabButtons = $$('.tab'), tabScroll = new Map();
         let currentTab = null;
         tablist.setAttribute('role', 'tablist');
@@ -38,6 +91,24 @@
                 group.append(child);
             }
         }
+        const updateGroup = document.createElement('div');
+        updateGroup.className = 'console-group';
+        const updateHeading = document.createElement('h4');
+        updateHeading.textContent = 'Cập nhật';
+        const updateButton = document.createElement('button');
+        updateButton.type = 'button'; updateButton.id = 'rc-open-updates';
+        updateButton.className = 'sm ui-btn ui-btn-sm';
+        updateButton.textContent = 'Kiểm tra cập nhật';
+        const updateStatus = document.createElement('p');
+        updateStatus.setAttribute('role', 'status');
+        updateButton.addEventListener('click', async () => {
+            updateButton.disabled = true; updateStatus.textContent = '';
+            try { await RC.openUpdates(); }
+            catch { updateStatus.textContent = 'Không mở được cập nhật. Hãy tải lại tiện ích và làm mới EduNext.'; }
+            finally { updateButton.disabled = false; }
+        });
+        updateGroup.append(updateHeading, updateButton, updateStatus);
+        $('.sec[data-sec="feat"]').append(updateGroup);
         /* CONSOLE_SIZE_CONTROLS */
         $$('.sm').forEach(b => b.classList.add('ui-btn', 'ui-btn-sm'));
         $('.x').classList.add('ui-btn', 'ui-btn-ghost');
@@ -72,7 +143,7 @@
         };
         new ResizeObserver(revealSelectedTab).observe(tablist);
         const setTab = t => {
-            if (!tabInfo[t]) t = 'theme';
+            if (!tabButtons.some(b => b.dataset.tab === t)) t = 'theme';
             const body = $('.body');
             if (currentTab) tabScroll.set(currentTab, body.scrollTop);
             currentTab = t; cfg.uiTab = t; save();

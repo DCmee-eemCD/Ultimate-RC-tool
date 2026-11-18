@@ -1,0 +1,18 @@
+:root { color-scheme: light dark; font-family: "Segoe UI", system-ui, sans-serif; }
+body.w { --bg:#fafafa; --surface:#fff; --line:#d5d8dd; --fg:#22252b; --acc:#315aca; --secondary:var(--acc); margin:0; background:var(--bg); color:var(--fg); font-size:15px; line-height:1.65; }
+@media (prefers-color-scheme:dark) { body.w { --bg:#17191d; --surface:#22252b; --line:#42464e; --fg:#edf0f5; --acc:#a7baff; } }
+main { max-width:680px; margin:48px auto; padding:0 24px 32px; }
+h1 { font-size:28px; line-height:1.2; margin:8px 0 20px; }
+h2 { font-size:20px; }
+.eyebrow { font-size:13px; margin:0; }
+.actions { display:flex; flex-wrap:wrap; align-items:center; gap:12px; margin:20px 0 32px; }
+section { border-top:1px solid var(--line); padding-top:12px; }
+li { margin:12px 0; padding-left:6px; }
+ol { padding-left:22px; }
+a { color:var(--acc); text-underline-offset:3px; }
+code { overflow-wrap:anywhere; }
+#status { background:var(--surface); border:1px solid var(--line); border-radius:6px; padding:14px; overflow-wrap:anywhere; }
+.ui-btn { min-height:40px; height:auto; white-space:normal; }
+[hidden] { display:none !important; }
+:focus-visible { outline:2px solid var(--acc); outline-offset:3px; }
+@media (max-width:480px) { main { margin:24px auto; padding-inline:18px; } }

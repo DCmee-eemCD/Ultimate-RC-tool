@@ -76,14 +76,6 @@ html,body{overflow-x:clip}
   #answer:hover{background:color-mix(in srgb,var(--acc) 90%,var(--fg))}
 }
 :is(button,#question-preview):focus-visible{outline:2px solid var(--fg);outline-offset:2px;transition:none}
-#ai-panel{transition-property:opacity,transform,display,overlay;transition-duration:var(--ai-duration);transition-timing-function:var(--ai-ease);transition-behavior:allow-discrete}
-#ai-panel:popover-open{opacity:1}
-@starting-style{#ai-panel:popover-open{opacity:0}}
-@media(prefers-reduced-motion:no-preference){
-  #ai-panel:popover-open{transform:translateY(0)}
-  @starting-style{#ai-panel:popover-open{transform:translateY(8px)}}
-  @supports not (transition-behavior:allow-discrete){#ai-panel:popover-open{animation:ai-enter var(--ai-duration) var(--ai-ease)}}
-}
-@keyframes ai-enter{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+[data-rc-panel],[data-rc-launcher]{translate:0px}
 @media(prefers-reduced-motion:reduce){#ai-panel{transition-duration:var(--ai-reduced-duration);transform:none}.ui-btn:active:not(:disabled){transform:none}}
 [hidden]{display:none!important}

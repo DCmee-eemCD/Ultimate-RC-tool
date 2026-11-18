@@ -28,7 +28,7 @@ assert.equal(sandbox.read({__reactFiber$x:{memoizedProps:{canvas},return:{memoiz
     x.fillText('🎉 Chúc mừng em hoàn thành buổi học!',28,50);
     x.fillText('🔥 Kỷ lục chuỗi đúng liên tiếp: 5 câu',28,110);
     x.fillText('💪 Điểm mạnh',28,170);
-    x.fillText('Normal plain text remains selectable.',28,230);
+    x.fillText('Normal plain text remains selectable. 💡',28,230);
     x.fillText('Hẹn gặp em ở buổi học tiếp theo! 💪',28,290);
     const one=await core.ocrPipeline(c,recognize,1),two=await core.ocrPipeline(c,recognize,2);
     const formulaCanvas=document.createElement('canvas');formulaCanvas.width=960;formulaCanvas.height=250;
@@ -48,7 +48,8 @@ assert.equal(sandbox.read({__reactFiber$x:{memoizedProps:{canvas},return:{memoiz
  });
  for(const k of ['one','two']){
    assert.ok(result[k].segments.length>0,k+' OCR output');
-   assert.ok(result[k].segments.some(s=>s.type==='rich'&&s.parts.some(p=>p.type==='icon')),k+' colored glyphs stay visual');
+   assert.match(result[k].text,/🔥/,k+' flame is recognized as selectable Unicode');
+   assert.match(result[k].text,/💪/,k+' arm is recognized as selectable Unicode');
    assert.ok(result[k].segments.filter(s=>s.type==='rich').every(s=>s.parts.some(p=>p.type==='text')),k+' rich lines keep selectable words');
    assert.match(result[k].text,/Normal plain text/);
    assert.match(result[k].text,/Kỷ lục/);
@@ -71,7 +72,7 @@ assert.equal(sandbox.read({__reactFiber$x:{memoizedProps:{canvas},return:{memoiz
    host.querySelector('[data-a="copy"]').click();
    return {ocrImages,copiedOcr,copiedSource:copied,sourceImages:host.querySelectorAll('.rc-ocr-body img').length};
  },{renderCode,result,sample});
- assert.ok(rendered.ocrImages>=4);assert.equal(rendered.copiedOcr,result.two.text);assert.equal(rendered.copiedSource,sample);assert.equal(rendered.sourceImages,0);
+ assert.equal(rendered.ocrImages,0,'emoji render as text'); assert.match(result.one.text,/💡/); assert.match(result.two.text,/💡/);assert.equal(rendered.copiedOcr,result.two.text);assert.equal(rendered.copiedSource,sample);assert.equal(rendered.sourceImages,0);
  const summary={sourceTests:'passed',rendered,one:result.one.text,two:result.two.text,formula:result.formula.text,diagram:result.diagram.segments};
  fs.writeFileSync(path.join(root,'tests/results/FIDELITY-TEST-RESULTS.json'),JSON.stringify(summary,null,2));console.log(JSON.stringify(summary,null,2));
  }finally{await context.close();}

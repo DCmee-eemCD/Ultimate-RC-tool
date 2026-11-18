@@ -41,6 +41,9 @@ async function handle(m,sender){
   }
   if(m.op?.startsWith('llm-'))return RCLLM.handle(m,sender);
   switch(m.op){
+    case 'updates-open':
+      if(sender.frameId!==0 || new URL(sender.url).origin!=='https://fsc-edunext.fpt.edu.vn')throw new Error('Invalid update sender');
+      await chrome.tabs.create({url:extensionRoot+'updates.html',active:true});return;
     case 'ocr': {
       validateImageUrl(m.url);
       if(!['eng','vie','vie+eng'].includes(m.langs)||!Number.isInteger(m.threads)||m.threads<0||m.threads>8||!Number.isFinite(m.idle)||m.idle<0||m.idle>120)throw Error('Invalid OCR options');

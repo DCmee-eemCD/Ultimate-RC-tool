@@ -1,12 +1,32 @@
 [
   {
-    "bugId": "PAGE-1",
+    "bugId": "OCR-1",
     "verdict": "REAL_BUG",
     "trueSeverity": "Medium",
     "confidenceScore": 100,
     "confidenceLabel": "high",
     "verificationMode": "INDEPENDENTLY_VERIFIED",
-    "analysisSummary": "Re-read forceScan and source recovery. The cache bypass never checks current originalResult, independently reproduced with actual extracted production functions.",
-    "suggestedFix": "Refresh current originals for the target group's URLs before the cached copy fast path, preserving non-placeholder image segments."
+    "analysisSummary": "Render red 'Red' followed by flame; OCR words Red and @ produced Red [emoji/ky hieu trong anh] flame. Confirmed in isolated browser fixtures; all 30 final cases pass.",
+    "suggestedFix": "Consume color ranges belonging to ordinary words."
+  },
+  {
+    "bugId": "OCR-2",
+    "verdict": "REAL_BUG",
+    "trueSeverity": "Medium",
+    "confidenceScore": 100,
+    "confidenceLabel": "high",
+    "verificationMode": "INDEPENDENTLY_VERIFIED",
+    "analysisSummary": "Red Congratulations followed by flame with OCR @; no rich output was produced at scales 1 and 2. Confirmed in isolated browser fixtures; all 30 final cases pass.",
+    "suggestedFix": "Filter oversized ranges individually instead of skipping the line."
+  },
+  {
+    "bugId": "OCR-3",
+    "verdict": "REAL_BUG",
+    "trueSeverity": "Medium",
+    "confidenceScore": 100,
+    "confidenceLabel": "high",
+    "verificationMode": "INDEPENDENTLY_VERIFIED",
+    "analysisSummary": "Red Go next to flame became [emoji/ky hieu trong anh] flame. Confirmed in isolated browser fixtures; all 30 final cases pass.",
+    "suggestedFix": "Require a recognized emoji before replacing letter-like short OCR tokens."
   }
 ]

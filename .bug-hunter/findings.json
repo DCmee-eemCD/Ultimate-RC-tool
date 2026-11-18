@@ -1,16 +1,50 @@
 [
   {
-    "bugId": "PAGE-1",
+    "bugId": "OCR-1",
     "severity": "Medium",
-    "category": "data-integrity",
-    "file": "extension/app.js",
-    "lines": "975-982",
-    "claim": "Copy latest returns stale OCR after original text becomes available.",
-    "evidence": "recoverOriginals updates only the bubble; forceScan reads combinedFor(id) directly from textByUrl.",
-    "runtimeTrigger": "OCR finishes before original message content arrives; recovery displays original; right-click the OCR pill copies old OCR.",
+    "category": "logic",
+    "file": "source/ocr-fidelity.js",
+    "lines": "140-153",
+    "claim": "Colored words are emitted again as inline glyph images.",
+    "evidence": "The ordinary-word branch emitted text without marking overlapping color ranges used; addIcon later appended the same pixels.",
+    "runtimeTrigger": "Render red 'Red' followed by flame; OCR words Red and @ produced Red [emoji/ky hieu trong anh] flame.",
     "crossReferences": [
-      "source/text-source.js:36-46",
-      "scripts/transforms/source-first.mjs"
+      "scripts/transforms/ocr-engine.mjs",
+      "scripts/transforms/ocr-core.mjs"
+    ],
+    "confidenceScore": 100,
+    "stride": "N/A",
+    "cwe": "N/A"
+  },
+  {
+    "bugId": "OCR-2",
+    "severity": "Medium",
+    "category": "logic",
+    "file": "source/ocr-fidelity.js",
+    "lines": "98-109",
+    "claim": "One wide colored heading disables recovery of separate emoji on the same line.",
+    "evidence": "ranges.some(width > 48 * scale) caused the entire line to be skipped.",
+    "runtimeTrigger": "Red Congratulations followed by flame with OCR @; no rich output was produced at scales 1 and 2.",
+    "crossReferences": [
+      "scripts/transforms/ocr-engine.mjs",
+      "scripts/transforms/ocr-core.mjs"
+    ],
+    "confidenceScore": 100,
+    "stride": "N/A",
+    "cwe": "N/A"
+  },
+  {
+    "bugId": "OCR-3",
+    "severity": "Medium",
+    "category": "logic",
+    "file": "source/ocr-fidelity.js",
+    "lines": "136-148",
+    "claim": "Short colored words and numbers are replaced with glyph crops and lost from copyable text.",
+    "evidence": "glyphToken uses length <= 2 and color overlap without requiring an emoji match.",
+    "runtimeTrigger": "Red Go next to flame became [emoji/ky hieu trong anh] flame.",
+    "crossReferences": [
+      "scripts/transforms/ocr-engine.mjs",
+      "scripts/transforms/ocr-core.mjs"
     ],
     "confidenceScore": 100,
     "stride": "N/A",

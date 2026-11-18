@@ -51,11 +51,18 @@ const {ROOT: root, launchExtension} = require('./lib/browser.cjs');
         assert.equal(await p.locator('#rc-kit [data-k="sourceFirst"]').isChecked(),true);
         await p.screenshot({path:path.join(root,'.transfer','console-custom-size.png'),animations:'disabled'});
         const tabs=p.locator('#rc-kit [role="tab"]'), body=p.locator('#rc-kit .body');
-        assert.equal(await tabs.count(),4);
+        assert.equal(await tabs.count(),3);
+        const musicToggle = p.locator('#rc-kit #rc-music-toggle');
+        await musicToggle.click();
+        assert.equal(await p.locator('#rc-kit #rc-music-url').isVisible(), true);
+        assert.equal(await musicToggle.getAttribute('aria-expanded'), 'true');
+        await p.keyboard.press('Escape');
+        assert.equal(await musicToggle.getAttribute('aria-expanded'), 'false');
+        assert.equal(await p.locator('#rc-kit #gear').getAttribute('aria-expanded'), 'true');
         const slide = await p.locator('#rc-kit .tabs').evaluate(async strip => {
             const x = () => new DOMMatrixReadOnly(getComputedStyle(strip, '::after').transform).m41;
             const start = x();
-            const target = strip.querySelector('[data-tab="music"]');
+            const target = strip.querySelector('[data-tab="ocr"]');
             target.click();
             x(); // Resolve the new style so Chrome creates the CSS transition.
             await new Promise(resolve => requestAnimationFrame(resolve));
@@ -80,7 +87,7 @@ const {ROOT: root, launchExtension} = require('./lib/browser.cjs');
         for(const mode of ['dark','light']) {
             await tabs.nth(0).click();
             await p.locator('#rc-kit [data-theme-mode="'+mode+'"]').click();
-            for(const key of ['theme','feat','ocr','music']) {
+            for(const key of ['theme','feat','ocr']) {
                 await p.locator('#rc-kit [data-tab="'+key+'"]').click();
                 await body.evaluate(e=>e.scrollTop=0);
                 await p.screenshot({path:path.join(root,'.transfer','console-'+mode+'-'+key+'.png'),animations:'disabled'});
@@ -91,6 +98,11 @@ const {ROOT: root, launchExtension} = require('./lib/browser.cjs');
         assert.equal(await p.locator('#rc-kit .tabs').evaluate(e=>getComputedStyle(e,'::after').transitionDuration),'0s');
         assert.equal(await p.locator('#rc-kit .sec.act').evaluate(e=>getComputedStyle(e).animationName),'none');
         await p.setViewportSize({width:360,height:640});
+        await musicToggle.click();
+        const musicBounds = await p.locator('#rc-kit #rc-music-settings').boundingBox();
+        assert.ok(musicBounds.x >= 0 && musicBounds.x + musicBounds.width <= 360 && musicBounds.y >= 0 && musicBounds.y + musicBounds.height <= 640);
+        await p.locator('#rc-kit #rc-music-settings').screenshot({path:path.join(root,'.transfer','music-panel.png')});
+        await p.keyboard.press('Escape');
         const bounds=await p.locator('#rc-kit #panel').boundingBox();
         assert.ok(bounds.x>=0 && bounds.x+bounds.width<=360 && bounds.y>=0 && bounds.y+bounds.height<=640);
         const selected=await tabs.nth(0).boundingBox(), strip=await p.locator('#rc-kit .tabs').boundingBox();

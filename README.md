@@ -1,8 +1,12 @@
+<a id="english"></a>
+
+[English](#english) | [Tiếng Việt](#tieng-viet)
+
 # Ultimate RC tools — Chrome extension
 
-Current version: **2.0.0** (version numbering reset at the owner's request).
-Documentation reviewed **2026-11-17** against the current source and test scripts.
-This review is not a new packaged release or a fresh runtime test pass.
+Current version: **2.1.0** (version numbering reset at the owner's request).
+Update-system documentation reviewed **2026-11-18** against the current source.
+This review does not create a packaged release; focused check results are below.
 
 Ultimate RC tools customizes EduNext's appearance, recovers original message text
 when available, provides local Vietnamese/English OCR, adds background music,
@@ -10,6 +14,44 @@ and automatically answers new questions through your own OpenAI-compatible API.
 Follow the supplied AGENTS.md instructions and local `RULES.md` for maintenance.
 `RULES.md` and the optional `CONTEXT.md` handoff are excluded from Git, so they
 may not exist in a fresh clone; setup and limitations are documented here.
+
+## Check for updates
+
+Open **Tiện ích → Kiểm tra cập nhật** in the Ultimate RC console. The update page
+checks the latest public stable release from
+[DCmee-eemCD/Ultimate-RC-tool](https://github.com/DCmee-eemCD/Ultimate-RC-tool/releases).
+If its version is higher than the installed manifest version, Chrome downloads
+the release ZIP automatically and the page shows a four-step update guide.
+Equal or older releases are not downloaded. Checks run only when opening this page
+or clicking **Kiểm tra lại**, not in the background.
+
+Unzip the download, find the folder containing `manifest.json`, and copy its
+contents over the **same folder already loaded in Chrome**. At `chrome://extensions`,
+enable Developer mode and click **Reload** on Ultimate RC tools, then refresh EduNext.
+Keep the folder path and existing extension installation to retain settings/API keys.
+The extension cannot replace its installed files automatically; it is distributed
+unpacked until Chrome Web Store publishing is available.
+
+The added `downloads` permission starts the ZIP download and tracks completion or
+interruption. No new host access is added. The updater accepts ZIP links only from
+this repository's GitHub release assets; it never executes downloaded code.
+Release tags should use `v2.2.0` (or a similar numeric version), matching the packaged
+manifest. Legacy nonnumeric tags such as `Peak_realese` use the version in
+`Ultimate-RC-tools-v2.0.0-unpacked.zip`. Attach one clearly named unpacked ZIP;
+missing, ambiguous, prerelease, or conflicting version metadata produces a message
+and a manual GitHub link. GitHub source archives are not selected automatically.
+
+Run `node tests/updates.cjs` for version/ZIP validation and isolated-browser coverage
+of the console button, download states, API errors, retry, tutorial and narrow layout.
+Release responses and downloads are mocked; this does not install a live release.
+On 2026-11-18, `node tests/updates.cjs` and `npm run check` passed during this
+review. Live GitHub availability and installation were not tested.
+
+Checks time out after 15 seconds. Keep the update tab open to see download status;
+reopening it starts a fresh check and may download the newer ZIP again until you
+install it. Release selection validates metadata and the asset URL, not the ZIP
+contents or a checksum. Release maintainers must verify that the packaged
+`manifest.json` matches the release version.
 
 ## BYOK short answers
 
@@ -73,6 +115,7 @@ or a submitted answer on a signed-in course.
 | `extension/` | Ready-to-load Chrome extension |
 | `source/` | Base userscript and maintained feature modules |
 | `source/console-ui.js` | Settings tabs (injected by the build) |
+| `source/panel-layout.js` | Shared opening-order layout for companion panels and launchers |
 | `source/console-size.js`, `source/console.css` | Resize interactions and panel styling |
 | `source/tokens.css`, `source/base.css` | Shared UI tokens, focus and reduced-motion foundations, imported by console.css |
 | `source/text-source.js` | Original-content matching |
@@ -96,7 +139,8 @@ The manifest is the version source; rebuild after changing its version.
 
 ## Current features and recent changes
 
-- Four settings tabs: **Giao diện**, **Tiện ích**, **Văn bản**, and **Nhạc**.
+- Three settings tabs: **Giao diện**, **Tiện ích**, and **Văn bản**.
+  **Nhạc** opens from its own music-note button beside the Assistant launcher.
   Each tab opens with a short description; flat settings rows and sentence-case
   group headings keep the controls easy to scan. Horizontal palette choices and
   flat color rows share the same saved theme colors. Wide panels arrange related
@@ -176,10 +220,18 @@ and narrow layouts. The interface uses Segoe UI and system-font fallbacks.
 The shared tab underline slides to the selected tab in 220 ms, follows resizing,
 and moves immediately when the system's reduced-motion preference is enabled.
 
-The bot-icon button opens a separate, theme-matched AI panel beside the main
-console. Both the assistant and API settings are 340px wide, shrinking to fit
-narrow screens. Escape closes the AI
-panel first; closing the main console hides both. API settings use an isolated
+The bot and music-note buttons open separate, theme-matched Assistant and Music
+panels. Closed-panel launchers are 44px buttons spaced 8px apart. Open panels
+line up to the right of Settings in opening order, with aligned tops and 12px
+gaps. Closing a panel shifts the others left; reopening places it last. Unopened
+launchers move after the open panels. Panels keep their own content height.
+On narrow screens, panels are kept onscreen and may overlap; this is not a
+horizontally scrolling workspace. Opening the Music panel does not start playback;
+paste a link and choose **Mở trình phát** to play it.
+
+Companion panels are 340px wide, shrinking to fit narrow screens. Escape closes
+Music first when it is open, otherwise Assistant, before the main console.
+Closing the main console hides both companion panels. API settings use an isolated
 extension-origin frame inside the AI panel. Opening uses a 180 ms fade/slide
 (60 ms fade with reduced motion). The assistant uses a 6px rounded scrollbar.
 API settings use a slim, theme-matched scrollbar and support the mouse
@@ -193,9 +245,9 @@ only one scrolling area when it is taller than the available screen space.
 1. Open the [GitHub Releases page](https://github.com/DCmee-eemCD/Ultimate-RC-tool/releases).
 2. Under the release's **Assets**, download **Ultimate-RC-tools-v2.0.0-unpacked.zip**
    (or the equivalent unpacked ZIP for a newer version).
-3. Right-click the downloaded ZIP and choose **Extract All...** on Windows.
-4. Extract it into a permanent folder, such as `Documents/Ultimate-RC-tools`.
-   Keep this folder after installation: Chrome loads the extension from it.
+3. Extract the downloaded archive into a permanent folder, such as
+   `Documents/Ultimate-RC-tools`. Keep this folder
+   after installation: Chrome loads the extension from it.
 
 The release ZIP contains an **extension** folder, **INSTALL.txt**, **README.md**,
 and **LICENSE**. Use the unpacked ZIP attached to the release for these steps;
@@ -232,9 +284,10 @@ API key. The optional AI assistant needs your own provider settings; see
 
 ### Update an existing installation
 
-1. Download and extract the new release ZIP.
-2. Close any open EduNext tabs, then copy the contents of the new **extension**
-   folder into the same **extension** folder you originally loaded. Choose to
+1. Open **Tiện ích → Kiểm tra cập nhật** to download a newer ZIP, or download
+   it manually from GitHub Releases, then extract it.
+2. Close any open EduNext tabs, then find the extracted folder containing
+   `manifest.json` and copy its contents into the same folder you originally loaded. Choose to
    replace existing files.
 3. Open `chrome://extensions`, find **Ultimate RC tools**, and click its
    **Reload** button (the circular arrow).
@@ -283,7 +336,8 @@ Your original Tampermonkey settings remain untouched.
 
 The extension injects its GUI only on the original EduNext domain. HTTP(S) host
 access allows arbitrary image/video background URLs, FPT image downloads, and
-requests to the configured LLM provider. The API form and its bundled resources
+requests to the configured LLM provider and GitHub release checks. The `downloads`
+permission starts update ZIP downloads and tracks their status. The API form and its bundled resources
 are web-accessible only to EduNext so it can be embedded without exposing its
 document or key to page scripts. `clipboardWrite` preserves auto-copy; `storage` and
 `unlimitedStorage` preserve settings and locally uploaded backgrounds/videos.
@@ -309,7 +363,7 @@ npm run test:byok # provider, secret isolation, AI panel and settings fixtures
 ```
 
 `npm run check` checks syntax in app, OCR core/engine, auto-answer, LLM backend,
-LLM settings, background and bridge scripts. It does not run browser tests or
+LLM endpoint/settings, background, bridge, runtime, update-release and updates scripts. It does not run browser tests or
 cover every maintained module. `npm test` runs only `tests/source-first.cjs`.
 
 `npm run build` runs `node build.mjs`. Tailwind 4 and daisyUI 5 compile
@@ -342,6 +396,12 @@ Directly maintained extension files include `runtime.js` (page compatibility API
 requests), `offscreen.js` (OCR queue/workers), and `wasm-kernels.js` (kernel loading
 and fallbacks). The normal request path is page code → bridge → service worker →
 offscreen OCR → result returned to the page.
+
+The updater's `extension/update-release.js` and `extension/updates.html/.js/.css`
+are maintained directly. Its console button lives in `source/console-ui.js` and
+is built into `extension/app.js`. `RC.openUpdates()` passes through the bridge to
+the background worker, which accepts only top-frame EduNext senders and opens
+the update page. GitHub requests and download tracking run in that extension page.
 
 AI uses a separate route: isolated `auto-answer.js` → background `llm.js` →
 configured provider. API configuration lives under `rcLlmConfig`; bridge snapshots
@@ -498,3 +558,638 @@ at 24. These checks used isolated Chrome fixtures, not a signed-in live page.
 If you update runtime files, click **Reload** on the extension card and reload
 EduNext. Keep the extracted extension folder in place. Documentation-only edits
 do not require a build or reload.
+
+<a id="tieng-viet"></a>
+
+[English](#english) | [Tiếng Việt](#tieng-viet)
+
+# Ultimate RC tools — tiện ích Chrome
+
+Phiên bản hiện tại: **2.1.0** (việc đánh số phiên bản đã được đặt lại theo yêu cầu
+của chủ sở hữu).
+Phần cập nhật được rà soát **2026-11-18** dựa trên mã nguồn hiện tại.
+Lần rà soát này không tạo bản phát hành mới; kết quả kiểm tra riêng được ghi bên dưới.
+
+Ultimate RC tools tùy biến giao diện EduNext, khôi phục văn bản tin nhắn gốc khi
+có thể, cung cấp OCR tiếng Việt/Anh cục bộ, thêm nhạc nền và tự động trả lời câu
+hỏi mới thông qua API tương thích OpenAI của bạn.
+Hãy làm theo hướng dẫn trong AGENTS.md được cung cấp và `RULES.md` cục bộ để bảo
+trì.
+`RULES.md` và bản bàn giao `CONTEXT.md` tùy chọn bị loại khỏi Git, nên có thể
+không tồn tại trong bản sao mới; phần thiết lập và các giới hạn được ghi lại ở
+đây.
+
+## Kiểm tra cập nhật
+
+Trong bảng Ultimate RC, mở **Tiện ích → Kiểm tra cập nhật**. Trang cập nhật kiểm tra
+bản phát hành ổn định mới nhất trên GitHub và tự tải ZIP nếu phiên bản cao hơn bản
+đang dùng. Bản bằng hoặc cũ hơn sẽ không được tải. Nếu GitHub lỗi hoặc thiếu ZIP,
+trang sẽ báo rõ và có liên kết tải thủ công.
+
+Giải nén ZIP, tìm thư mục chứa `manifest.json`, rồi chép toàn bộ nội dung vào
+**đúng thư mục tiện ích đã nạp trong Chrome**, thay thế tệp trùng tên. Mở
+`chrome://extensions`, bật chế độ nhà phát triển, bấm **Tải lại ↻** trên thẻ Ultimate
+RC tools, rồi làm mới EduNext. Giữ đường dẫn và không gỡ tiện ích để giữ cài đặt/khóa API.
+Hướng dẫn bốn bước này cũng hiển thị trên trang cập nhật. Tiện ích chưa có trên Chrome
+Web Store nên không tự thay tệp đã cài. Quyền `downloads` mới dùng để tải ZIP và theo
+dõi trạng thái; không thêm quyền truy cập host.
+
+Chỉ kiểm tra khi mở trang hoặc bấm **Kiểm tra lại**, không kiểm tra nền định kỳ.
+Yêu cầu GitHub có giới hạn 15 giây. Giữ trang mở để xem trạng thái tải; mở lại sẽ
+kiểm tra mới và có thể tải ZIP lần nữa nếu bạn chưa cài phiên bản mới.
+Chỉ chọn ZIP đã tải lên kho phát hành chính thức, ưu tiên đúng một ZIP có tên
+`unpacked`, nếu không thì cần đúng một ZIP. Bản nháp, prerelease, nhiều ZIP không
+rõ lựa chọn hoặc phiên bản tag/tên ZIP mâu thuẫn đều bị từ chối. Tag không phải
+số có thể dùng phiên bản trong tên ZIP. Không tự chọn kho mã nguồn của GitHub.
+Hệ thống không kiểm tra nội dung ZIP hay checksum; người phát hành phải bảo đảm
+phiên bản trong `manifest.json`, tag và tên ZIP khớp nhau.
+
+Chạy `node tests/updates.cjs` để kiểm tra lựa chọn phiên bản/ZIP, nút mở trang,
+trạng thái tải, lỗi, thử lại, hướng dẫn và bố cục hẹp trong trình duyệt riêng.
+GitHub và tải xuống được giả lập; kiểm thử không cài bản phát hành thật.
+Ngày 2026-11-18, `node tests/updates.cjs` và `npm run check` đều đạt trong lần
+rà soát này. Chưa kiểm tra GitHub trực tiếp hoặc cài đặt bản phát hành thật.
+
+<a id="vi-byok"></a>
+
+## Trả lời ngắn bằng BYOK
+
+Tải lại tiện ích đã giải nén tại `chrome://extensions`, sau đó làm mới EduNext.
+Mở bảng điều khiển Ultimate RC chính, rồi nhấp **biểu tượng bot** cạnh mép trên
+để mở bảng **Trợ lý AI** đi kèm.
+Nhấp **Cài đặt API** tại đó để chỉnh sửa cài đặt ngay trong bảng điều khiển.
+Nhập URL cơ sở API tương thích OpenAI của bạn (ví dụ
+`https://api.openai.com/v1`), ID model của nhà cung cấp và API key của bạn, rồi
+lưu.
+Có thể dùng cả URL đầy đủ `/chat/completions`.
+Khi đổi nhà cung cấp, hãy nhập key cho endpoint mới.
+Có thể lưu Endpoint API trống và endpoint này vẫn trống sau khi mở lại. Không có
+giá trị mặc định nào được chèn vào.
+Hãy nhập endpoint trước khi gửi yêu cầu AI.
+Các nhà cung cấp khác vẫn cần URL riêng; key không tự xác định nhà cung cấp.
+Tính năng tự sửa endpoint bị tắt: việc lưu và mở lại giữ nguyên địa chỉ của bạn
+(ngoài khoảng trắng ở đầu và cuối).
+Không tự đoán đường dẫn của nhà cung cấp.
+Địa chỉ không có scheme dùng HTTPS nội bộ cho các yêu cầu, hoặc HTTP khi là
+localhost.
+ID model vẫn bắt buộc.
+Khi lưu, endpoint sau khi phân giải được hiển thị rõ ràng.
+Đổi sang endpoint mới yêu cầu nhập key của endpoint đó; các key đã lưu không được
+âm thầm dùng lại.
+
+Bảng AI xem trước câu hỏi hiện tại.
+Dùng **Đọc lại** để làm mới phần xem trước này mà không gọi nhà cung cấp.
+Vùng trạng thái hiển thị tiến trình, hoàn tất hoặc vấn đề cần chú ý.
+Mở **Cài đặt API** sẽ chuyển sang biểu mẫu kết nối; nút **Quay lại trợ lý** có
+viền và mũi tên trái sẽ đưa về câu hỏi.
+Câu hỏi nằm ở đầu bảng, tiếp theo là công tắc chế độ tự động, các điều khiển trả
+lời và một vùng trạng thái riêng.
+Các điều khiển chế độ tự động vẫn nằm trong chế độ trợ lý.
+
+Cài đặt API dùng biểu mẫu một cột, được nhóm thành **Kết nối** và **Khóa truy
+cập**.
+Cả hai màn hình tuân theo bảng màu sáng/tối đã lưu.
+**Hiện khóa** nằm bên trong trường key; trạng thái key đã lưu và **Xóa khóa** nằm
+ngay bên dưới trường đó.
+**Lưu cấu hình** là nút chính rộng toàn bộ.
+Biểu mẫu tương tự cũng có trong tùy chọn của tiện ích.
+
+Khi một cuộc trò chuyện đang mở, AI tự động đọc ô **Câu hỏi** trong tin nhắn trợ
+lý mới nhất sau khi văn bản ổn định, yêu cầu một câu trả lời tiếng Việt ngắn, điền
+vào trình soạn thảo Text đang trống và nhấp **Nộp câu trả lời**.
+Bảng AI có thể vẫn đóng.
+**Tự động: Bật/Tắt** tạm dừng hoặc tiếp tục trả lời tự động; tính năng bắt đầu
+được bật khi trang tải xong.
+**AI trả lời & gửi** vẫn có thể dùng để thử lại thủ công.
+Câu hỏi thất bại không được tự động thử lại cho đến khi bạn tiếp tục trả lời tự
+động hoặc lưu cài đặt API.
+**Dừng** tạm dừng trả lời tự động và ngăn câu trả lời đang chờ được gửi; yêu cầu
+đến nhà cung cấp vẫn có thể phát sinh phí.
+Bản nháp hiện có được giữ lại, câu hỏi thay đổi sẽ hủy kết quả cũ và câu hỏi đã
+được tính năng này gửi trên trang đó sẽ không được gửi lại.
+
+Chỉ phần văn bản câu hỏi đã trích xuất được gửi đến nhà cung cấp API đã cấu hình.
+Câu hỏi dạng hình ảnh trước hết cần văn bản có thể đọc được từ khôi phục nguồn/OCR;
+tính năng chỉ xử lý văn bản này không hỗ trợ câu hỏi có sơ đồ.
+Câu trả lời của model có thể sai.
+Tính năng dùng số dư API của bạn và không dùng gói đăng ký ChatGPT.
+
+Key được lưu cục bộ trong bộ nhớ của tiện ích Chrome, không nằm trong bản xuất
+theme hay bộ nhớ của trang web.
+Bộ nhớ cục bộ không phải kho mật khẩu được mã hóa.
+Dùng **Xóa khóa** trên trang cài đặt để xóa key.
+Không có thông tin xác thực nào được đóng gói.
+Các lệnh gọi API chạy trong nền của tiện ích, không đi qua cầu nối tin nhắn của
+trang.
+
+Kiểm thử BYOK: `npm run test:byok` bao phủ các lệnh gọi nhà cung cấp giả lập, cách
+ly key và fixture gửi trong trình duyệt.
+Các kiểm thử này không chứng nhận nhà cung cấp trả phí trực tiếp hay câu trả lời
+được gửi trong một khóa học đã đăng nhập.
+
+## Bố cục dự án
+
+| Thư mục | Nội dung |
+| --- | --- |
+| `extension/` | Tiện ích Chrome sẵn sàng tải |
+| `source/` | Userscript cơ sở và các module tính năng được duy trì |
+| `source/console-ui.js` | Các tab cài đặt (được build chèn vào) |
+| `source/console-size.js`, `source/console.css` | Tương tác đổi kích thước và kiểu dáng bảng |
+| `source/tokens.css`, `source/base.css` | Token UI dùng chung, nền tảng focus và reduced-motion, được console.css import |
+| `source/text-source.js` | Đối sánh nội dung gốc |
+| `source/auto-answer.js` | Bảng AI cô lập được duy trì và vòng đời trả lời |
+| `source/assistant.css` | Kiểu bố cục và điều khiển trợ lý, được đóng gói vào runtime AI cô lập |
+| `extension/auto-answer.js` | Runtime AI được tạo, gồm CSS đã đóng gói |
+| `extension/llm.js` | Yêu cầu đến nhà cung cấp và cấu hình API cục bộ riêng tư |
+| `extension/llm-settings.html`, `.js`, `.css` | Biểu mẫu API, nhúng trong bảng AI hoặc mở như tùy chọn tiện ích |
+| `source/ocr-fidelity.js` | Sửa văn bản OCR đang hoạt động và giữ glyph màu nội tuyến; không dự phòng bằng ảnh cả dòng |
+| `scripts/transforms/` | Một transform build cho mỗi tính năng, được `build.mjs` áp dụng |
+| `scripts/lib/` | Trợ giúp vá văn bản có kiểm tra và đường dẫn dự án |
+| `package.json`, `package-lock.json` | Phụ thuộc build CSS và script build npm |
+| `rust-kernels/` | Mã nguồn Rust/WASM và script build |
+| `images/` | Asset logo gốc |
+| `tests/` | Script và fixture kiểm thử (`tests/lib/browser.cjs`: thiết lập trình duyệt dùng chung) |
+| `tests/results/` | Báo cáo kiểm thử đã lưu (lịch sử trừ khi có ghi khác) |
+| `releases/archive/` | ZIP cũ cục bộ, bị loại khỏi Git |
+| `.transfer/` | Công cụ trình duyệt cục bộ, profile cô lập và khu vực staging; không bao giờ đưa vào gói |
+
+Manifest là nguồn phiên bản; hãy build lại sau khi thay đổi phiên bản.
+
+## Tính năng hiện tại và thay đổi gần đây
+
+- Có ba tab cài đặt: **Giao diện**, **Tiện ích** và **Văn bản**.
+  **Nhạc** mở bằng nút nốt nhạc riêng cạnh nút Trợ lý.
+  Mỗi tab mở ra với mô tả ngắn; các hàng cài đặt phẳng và tiêu đề nhóm theo kiểu
+  sentence-case giúp dễ quét.
+  Các lựa chọn bảng màu ngang và hàng màu phẳng dùng chung màu theme đã lưu.
+  Bảng rộng sắp xếp các nhóm cài đặt liên quan thành các cột; bảng hẹp giữ một
+  cột cuộn duy nhất.
+- Hành động chính dùng màu chính của theme.
+  Các cặp tiện ích dùng sắc độ yên hơn của màu chính và phụ với viền trung tính,
+  gồm tải/xóa nền, nhập/xuất theme và phát/dừng nhạc.
+  Cài đặt API có một hành động Save rộng toàn bộ và một điều khiển xóa key kín
+  đáo cạnh trạng thái key đã lưu.
+- Chế độ source-first được bật mặc định.
+  Nó khôi phục toàn bộ văn bản gốc từ một tin nhắn khớp chính xác, rồi chuyển sang
+  OCR cục bộ khi nội dung không có hoặc không rõ ràng.
+  OCR tự động rõ ràng và source-first loại trừ lẫn nhau.
+  LaTeX được khôi phục vẫn là văn bản nguồn; tính năng này không typeset lại nó.
+- Phần giao diện có màu nền dashboard, ô màu được tạo kiểu và switch/slider theo
+  theme.
+  Các bề mặt dashboard lấy sắc độ sáng/tối dễ đọc từ màu đã chọn thay vì hiển thị
+  nguyên màu thô.
+- Mọi theme nhanh và bảng màu ảnh đều hỗ trợ **Tối**, **Sáng** và **Tự động theo
+  thời gian**, dùng bộ chọn giao diện phía trên các theme nhanh.
+  Tự động dùng sáng từ 07:00 đến 19:00 và tối vào thời gian còn lại theo giờ địa
+  phương của máy; các tab đang mở kiểm tra mỗi 30 giây và khi được tiếp tục.
+  Chọn theme nhanh sẽ tắt việc tự động khớp màu ảnh để theme đã chọn luôn hoạt động.
+  Cả bảng màu Rust và JavaScript đều dùng mode đã chọn và cũng cập nhật màu
+  dashboard.
+  Thay đổi mode làm vô hiệu việc dùng lại bảng màu; kết quả bất đồng bộ cũ bị từ
+  chối nếu ảnh hoặc mode thay đổi.
+- Preset Discord có bảng màu sáng riêng.
+  Trạng thái hover của sidebar, menu tài khoản, tiêu đề tải muộn và tiêu đề bảng
+  tuân theo theme đang hoạt động.
+  Nút mode giao diện hiển thị nhãn khi hover hoặc focus bằng bàn phím.
+- Theme portable gồm `dashboardBg`, `imageThemeMode`, màu nhấn của console
+  (`consolePrimary`, `consoleSecondary`) và kích thước (`consoleWidth`,
+  `consoleHeight`).
+  Theme version 1 cũ không có các trường này vẫn giữ giá trị hiện tại.
+  Cài đặt OCR và hành vi không được chuyển khi truyền theme.
+  Theme gồm nền ảnh/video đã tải lên (video tối đa 14 MB); kích thước file theme
+  tối đa là 25 MB.
+  Nền liên kết vẫn là URL.
+- Thanh điều hướng trái của EduNext dùng icon SVG cho tài khoản, trang chủ, bài
+  tập, các lịch sắp tới, hướng dẫn, hỗ trợ và FAQ.
+  Các node ảnh gốc vẫn được giữ cho React; thay thế được áp dụng lại sau khi
+  render lại và đổi kích thước.
+  Nhãn nút bỏ emoji trang trí.
+- Nhạc chấp nhận liên kết YouTube/Spotify đã được kiểm tra và cung cấp tiêu đề,
+  vị trí API thực, tua, điều khiển phát SVG, công tắc hiển thị video và dừng.
+  Cả hai nhà cung cấp bắt đầu với video/embed thu gọn và điều khiển phát hiển thị.
+  Nút thu nhỏ riêng đưa player về icon góc 48px.
+  Ẩn hoặc thu nhỏ không yêu cầu tạm dừng; khi khôi phục vẫn giữ khả năng hiển thị
+  video.
+  Thanh tua màu xám chưa phát không phải chỉ báo download/buffer được đo lường.
+- Mở nhạc sẽ yêu cầu phát; tải lại trang chỉ khôi phục liên kết đã lưu.
+  Phát trực tiếp vẫn chịu giới hạn của việc nhúng, dịch vụ và autoplay.
+- Từ phiên bản 6.1.2 trước khi đặt lại, văn bản câu hỏi và công thức OCR vẫn là
+  văn bản có thể chọn; các đáp án đánh số ngắn được giữ lại.
+  Đã tắt việc thay ảnh cả dòng; glyph màu cô lập có thể vẫn là ảnh nội tuyến bên
+  cạnh các từ có thể chọn.
+  Sơ đồ thực tế vẫn có thể là các đoạn ảnh.
+
+OCR chạy cục bộ, dùng worker Tesseract tiếng Việt/Anh được đóng gói trong một
+tài liệu offscreen.
+Rust/WASM tăng tốc thao tác pixel; đây không phải model nhận dạng mới.
+Emoji, công thức và văn bản thông thường vẫn có thể được nhận dạng sai.
+Khôi phục nguồn React là nỗ lực tốt nhất.
+Thứ tự quan sát ảnh có thể khác thứ tự thời gian của cuộc trò chuyện: ảnh được
+quan sát gần nhất không nhất thiết là ảnh của tin nhắn mới nhất.
+Khôi phục nguồn cần một tin nhắn trợ lý khớp rõ ràng và nội dung không rỗng; nó
+không dựng lại văn bản gốc bị thiếu.
+Các kiểm thử fixture chưa xác minh EduNext đã đăng nhập và việc phát nhạc trực
+tiếp.
+
+## Điều khiển bảng
+
+Bảng cài đặt vẫn neo ở góc dưới bên trái.
+Preset kích thước là **Gọn** (320 x 520), **Mặc định** (380 x 620) và **Rộng**
+(560 x 820).
+Điều khiển kích thước nằm dưới phần cài đặt có thể cuộn và phía trên chân trang.
+Số đo hiển thị kích thước thực tế đang được hiển thị, bị giới hạn để vừa viewport.
+Thay đổi preset có hiệu ứng trong 240 ms trừ khi bật reduced motion; kéo cập nhật
+trực tiếp kích thước.
+
+Kéo mũi tên đổi kích thước mờ ở góc trên bên phải; nó nổi bật hơn khi hover,
+focus bằng bàn phím và trong lúc kéo.
+Khi grip được focus, các phím mũi tên điều chỉnh 10px; Shift điều chỉnh 40px.
+Home hoặc nhấp đúp chỉ đặt lại kích thước.
+Escape hủy thao tác kéo đang hoạt động mà không đóng bảng.
+Kích thước được lưu khi nhả chuột; chỉ thay đổi viewport sẽ giữ nguyên kích thước
+ưu tiên.
+Chiều rộng lưu được giới hạn từ 320 đến 560px và chiều cao từ 420 đến 820px.
+
+Bảng dùng bề mặt đơn giản, header gọn và dải tab kín đáo.
+Tab bằng bàn phím và vị trí cuộn riêng của từng tab vẫn được hỗ trợ cùng bố cục
+sáng/tối và hẹp.
+Giao diện dùng Segoe UI và các font hệ thống dự phòng.
+Gạch chân tab dùng chung trượt tới tab được chọn trong 220 ms, theo việc đổi kích
+thước và di chuyển ngay khi tùy chọn reduced-motion của hệ thống được bật.
+
+Nút bot và nốt nhạc mở các bảng Trợ lý và Nhạc riêng, khớp theme.
+Các nút mở bảng có kích thước 44px và cách nhau 8px. Bảng đã mở xếp bên phải
+console theo thứ tự mở, thẳng mép trên và cách nhau 12px. Đóng một bảng sẽ dồn
+các bảng còn lại sang trái; mở lại sẽ đặt bảng đó cuối hàng. Các nút chưa mở
+di chuyển ra sau các bảng đang mở. Mỗi bảng giữ chiều cao theo nội dung.
+Trên màn hình hẹp, các bảng được giữ trong màn hình và có thể chồng lên nhau;
+không có vùng làm việc cuộn ngang. Mở bảng Nhạc chưa phát nhạc: dán liên kết
+và chọn **Mở trình phát** để phát.
+Các bảng rộng 340px, thu nhỏ để vừa màn hình hẹp.
+Escape đóng Nhạc trước nếu đang mở, sau đó đến Trợ lý, rồi console chính.
+Đóng console chính sẽ ẩn cả hai bảng phụ.
+Cài đặt API dùng frame nguồn tiện ích cô lập bên trong bảng AI.
+Mở bảng dùng hiệu ứng mờ/trượt 180 ms (mờ 60 ms khi reduced motion).
+Trợ lý dùng thanh cuộn bo tròn 6px.
+Cài đặt API dùng thanh cuộn mảnh khớp theme và hỗ trợ con lăn chuột, cảm ứng hoặc
+bàn phím.
+Biểu mẫu tự động vừa frame, nên chỉ có một vùng cuộn khi nó cao hơn phần màn hình
+còn trống.
+
+## Cài đặt trong Chrome
+
+### 1. Tải xuống và giải nén
+
+1. Mở [trang GitHub Releases](https://github.com/DCmee-eemCD/Ultimate-RC-tool/releases).
+2. Trong **Assets** của bản phát hành, tải **Ultimate-RC-tools-v2.0.0-unpacked.zip**
+   (hoặc ZIP unpacked tương đương của phiên bản mới hơn).
+3. Giải nén archive đã tải vào một thư mục cố định, chẳng hạn
+   `Documents/Ultimate-RC-tools`.
+   Giữ thư mục này sau khi cài đặt: Chrome tải tiện ích từ đó.
+
+ZIP phát hành chứa thư mục **extension**, **INSTALL.txt**, **README.md** và
+**LICENSE**.
+Dùng ZIP unpacked đính kèm bản phát hành cho các bước này; bản tải **Source code**
+tự động của GitHub chứa toàn bộ dự án phát triển.
+
+### 2. Tải tiện ích
+
+1. Nếu trước đây bạn đã cài Ultimate RC tools trong Tampermonkey, hãy tắt
+   userscript đó để tránh nút và hành động bị trùng.
+2. Dán `chrome://extensions` vào thanh địa chỉ Chrome và nhấn **Enter**.
+3. Bật **Developer mode** ở góc trên bên phải.
+4. Nhấp **Load unpacked**.
+5. Mở thư mục đã giải nén và chọn thư mục **extension**.
+   Đây là thư mục chứa `manifest.json`; không chọn ZIP hoặc thư mục bao ngoài.
+6. Xác nhận **Ultimate RC tools** xuất hiện trong danh sách tiện ích và đang bật.
+
+Không cần cài build, Node.js, Rust, server hay Tampermonkey.
+Đây là tiện ích unpacked, không phải tiện ích cài từ Chrome Web Store.
+Manifest yêu cầu Chrome 116 trở lên.
+
+### 3. Mở EduNext
+
+1. Mở [EduNext](https://fsc-edunext.fpt.edu.vn/) và đăng nhập như thường lệ.
+   Nếu trang đã mở, hãy làm mới trang.
+2. Tìm launcher cài đặt **logo Fe** và nút văn bản ở góc dưới bên trái.
+3. Nhấp logo Fe hoặc nhấn **Alt+C** để mở cài đặt.
+   Nhấn **Esc** để đóng, trừ khi bạn đang hủy thao tác kéo đổi kích thước.
+
+Nút văn bản hiển thị **Chữ gốc** ở chế độ source-first hoặc **OCR** ở chế độ OCR.
+Nhấp phải vào nút này để quét ảnh được quan sát gần nhất.
+OCR chạy cục bộ và không cần API key.
+Trợ lý AI tùy chọn cần cài đặt nhà cung cấp của bạn; xem
+[Trả lời ngắn bằng BYOK](#vi-byok).
+
+### Cập nhật bản cài đặt hiện có
+
+1. Mở **Tiện ích → Kiểm tra cập nhật** để tải ZIP mới hơn, hoặc tải thủ công
+   từ GitHub Releases, rồi giải nén.
+2. Đóng mọi tab EduNext đang mở, tìm thư mục đã giải nén chứa `manifest.json`,
+   rồi chép nội dung vào đúng thư mục tiện ích đã nạp trước đó.
+   Chọn thay thế các file hiện có.
+3. Mở `chrome://extensions`, tìm **Ultimate RC tools** và nhấp nút **Reload**
+   (mũi tên vòng tròn).
+4. Mở lại EduNext.
+
+Giữ nguyên thư mục cài đặt và tải lại tiện ích hiện có để giữ cài đặt đã lưu.
+Bạn không cần xóa rồi cài lại.
+
+### Nếu tiện ích không tải
+
+- **Thiếu hoặc không đọc được manifest:** trước hết hãy giải nén ZIP, sau đó chọn
+  thư mục **extension** chứa `manifest.json`.
+- **Không có nút Load unpacked:** bật **Developer mode** tại
+  `chrome://extensions`.
+- **Không có nút trên EduNext:** bảo đảm tiện ích đang bật, kiểm tra bạn ở
+  `https://fsc-edunext.fpt.edu.vn/` và làm mới trang.
+- **Nút bị trùng:** tắt userscript Ultimate RC tools cũ trong Tampermonkey hoặc
+  bản cài trùng, rồi làm mới EduNext.
+- **Tiện ích ngừng hoạt động sau khi di chuyển file:** đưa thư mục đã giải nén về
+  vị trí ban đầu, rồi tải lại tiện ích.
+
+## Những gì đã thay đổi bên trong
+
+- Manifest V3 thay thế lớp bọc Tampermonkey.
+- Mã tính năng trang gốc vẫn chạy trong page world, giữ quyền truy cập vào React
+  fiber, thuộc tính MathLive và hook vẽ canvas.
+- Một bridge cô lập cung cấp bộ nhớ tiện ích, clipboard và tải media.
+- OCR chạy trong tài liệu offscreen do tiện ích sở hữu.
+  Chế độ tự động chọn tối đa bốn worker; chế độ thủ công hỗ trợ 1-8.
+  Job được xếp hàng, worker được dùng lại và ảnh giống nhau được cache trong bộ
+  nhớ (16 mục / 16 MiB).
+  Các điều khiển keep-warm/idle vẫn còn; keep-warm bị tắt sẽ giải phóng worker
+  sau khi dùng.
+  Nhiều worker hơn không phải lúc nào cũng nhanh hơn.
+- Tesseract.js 5.1.1, lõi WASM và dữ liệu ngôn ngữ tiếng Việt/Anh được đưa vào
+  ZIP.
+  OCR chạy cục bộ; không dùng OCR API hay API key.
+- Kiểu theme dùng adopted stylesheet để CSP nghiêm ngặt của trang không chặn chúng.
+  Sau lần cập nhật thành công đầu tiên, phần tử style cũ bị tắt và không được ghi
+  lại nữa.
+  Mỗi lần đổi theme chỉ cập nhật adopted stylesheet, tránh xuất bản CSS trùng.
+  Điều này giảm công việc không cần thiết; không phải bảo đảm đã đo lường rằng
+  việc chuyển theme trên trang trực tiếp sẽ không giật.
+  Yêu cầu OCR dùng runtime message thay vì thăm dò hộp thư lưu trữ.
+
+## Cài đặt và quyền
+
+Tiện ích có bộ nhớ riêng, tách khỏi Tampermonkey.
+Tùy chọn userscript hiện có không được tự động chuyển; lần chạy đầu tiên dùng mặc
+định hiện tại.
+Cài đặt Tampermonkey gốc của bạn không bị thay đổi.
+
+Tiện ích chỉ chèn GUI trên domain EduNext gốc.
+Quyền truy cập host HTTP(S) cho phép URL nền ảnh/video tùy ý, tải ảnh FPT và gửi
+yêu cầu đến nhà cung cấp LLM đã cấu hình và kiểm tra bản phát hành GitHub.
+Quyền `downloads` bắt đầu tải ZIP cập nhật và theo dõi trạng thái tải.
+Biểu mẫu API và các tài nguyên đi kèm chỉ có thể được EduNext truy cập trên web để
+có thể nhúng mà không làm lộ document hoặc key cho script của trang.
+`clipboardWrite` giữ chức năng tự sao chép; `storage` và `unlimitedStorage` giữ
+cài đặt cùng nền/video đã tải lên cục bộ.
+`declarativeNetRequestWithHostAccess` bật rule header CSP có phạm vi hẹp.
+`offscreen` cho phép xử lý DOM/canvas ẩn và worker OCR cục bộ.
+Tiện ích không yêu cầu lịch sử trình duyệt, mật khẩu, cookie hay quyền debugger.
+
+Rule `edunext_csp` đang bật chỉ xóa header phản hồi CSP và CSP-Report-Only khỏi
+document HTTPS trên `fsc-edunext.fpt.edu.vn`.
+Điều này xóa mọi bảo vệ CSP được phân phối qua header ở đó, không chỉ hạn chế
+media; CSP meta HTML là phần riêng.
+Các host khác và CSP của chính tiện ích không thay đổi.
+
+## Phát triển
+
+Từ thư mục gốc của dự án, khi đã cài Node.js và npm:
+
+```powershell
+npm ci
+npm run build   # regenerate extension/ files
+npm run check   # syntax-check generated scripts
+npm test        # Node-only source-first fixtures
+npm run test:byok # provider, secret isolation, AI panel and settings fixtures
+```
+
+`npm run check` kiểm tra cú pháp trong các script app, lõi/engine OCR, auto-answer,
+endpoint/backend LLM, cài đặt LLM, background, bridge, runtime, update-release và updates.
+Nó không chạy kiểm thử trình duyệt và không bao phủ mọi module được duy trì.
+`npm test` chỉ chạy `tests/source-first.cjs`.
+
+`npm run build` chạy `node build.mjs`.
+Tailwind 4 và daisyUI 5 biên dịch `source/console.css` thành
+`extension/console.css`, file này cũng được nhúng vào app.js.
+Stylesheet nguồn import `source/tokens.css` và `source/base.css`.
+Build sao chép license của cả hai thư viện CSS.
+Không chỉnh sửa trực tiếp CSS được tạo.
+
+`source/Ultimate-RC-tools-5.14.txt` là đầu vào build cơ sở, với các chỉnh sửa được
+duy trì cho kiểu tin nhắn và sidebar; tên file phản ánh nguồn gốc, không phải phiên
+bản tiện ích hiện tại.
+`node build.mjs` tạo lại `extension/app.js`, `extension/auto-answer.js`,
+`extension/ocr-core.js` và `extension/ocr-engine.js` cũ bằng các đường dẫn tương
+đối với thư mục gốc dự án.
+Từ thư mục làm việc khác, hãy gọi `node` với đường dẫn đầy đủ đến `build.mjs`;
+các lệnh npm ở trên chạy từ thư mục gốc dự án.
+Các file tiện ích khác được duy trì trực tiếp.
+
+Bố cục build:
+
+- `scripts/transforms/ocr-engine.mjs` build engine OCR (hook runtime, kernel Rust
+  với fallback JS); `ocr-core.mjs` lấy pipeline OCR đang hoạt động từ đó.
+- `scripts/transforms/page-base.mjs` điều chỉnh các tính năng trang cho runtime
+  tiện ích.
+- `scripts/transforms/index.mjs` liệt kê các transform tính năng theo thứ tự (icon
+  điều hướng, theme dashboard, OCR offscreen, truyền theme, nguồn văn bản,
+  launcher, nhạc, nhãn nút, thanh công cụ OCR, source-first, UI console).
+  Thứ tự quan trọng: transform sau neo vào văn bản do transform trước tạo ra.
+- Mã runtime được chèn vào app.js nằm trong `source/*.js`; hãy sửa các nguồn đó,
+  không sửa file đã tạo.
+
+Các file tiện ích được duy trì trực tiếp gồm `runtime.js` (API tương thích trang),
+`bridge.js` (nhắn tin isolated-world), `background.js` (service worker và yêu cầu
+media), `offscreen.js` (hàng đợi/worker OCR) và `wasm-kernels.js` (tải kernel và
+fallback).
+Đường đi yêu cầu thông thường là mã trang → bridge → service worker → OCR offscreen
+→ kết quả trả về trang.
+
+AI dùng một route riêng: `auto-answer.js` cô lập → `llm.js` nền → nhà cung cấp đã
+cấu hình.
+Cấu hình API nằm dưới `rcLlmConfig`; snapshot và event thay đổi của bridge được
+allowlist nên không bao giờ đi vào cache MAIN-world.
+Message cấu hình chỉ được chấp nhận từ `llm-settings.html`; yêu cầu trả lời chỉ từ
+content script EduNext ở top frame.
+Yêu cầu có timeout 45 giây, giới hạn câu hỏi 24.000 ký tự và giới hạn câu trả lời
+4.000 ký tự.
+Redirect, phản hồi bị cắt ngắn và câu trả lời rỗng/từ chối đều bị loại; không có
+tự động thử lại.
+Biểu mẫu nhúng chỉ báo chiều cao nội dung cho parent để tính kích thước.
+Parent kiểm tra frame gửi, origin của tiện ích và các giới hạn số.
+Message theme gồm cả màu chính và màu phụ; message kích thước và theme đều không
+mang API key hay giá trị biểu mẫu.
+
+Các transform tính năng dùng `scripts/lib/patch.mjs`: thay thế và chèn đơn yêu cầu
+đúng một anchor khớp; thao tác replace-all/regex yêu cầu ít nhất một anchor.
+Thay thế vùng yêu cầu các anchor biên tồn tại.
+Guard thất bại báo tên transform và anchor.
+Văn bản thay thế được chèn nguyên văn (không mở rộng `$&`).
+`extension/vendor/assets.json` liệt kê nguồn asset OCR được đóng gói và checksum
+SHA-256; license nằm dưới `extension/vendor`.
+
+Để build lại kernel Rust, cài target `wasm32-unknown-unknown`, chạy
+`rust-kernels/build.ps1`, sau đó build lại tiện ích.
+Chỉnh sửa chỉ ở UI không cần build lại Rust.
+WASM được đóng gói có fallback JavaScript.
+
+Kiểm thử trình duyệt cần Playwright và Chrome for Testing được cấp riêng;
+`npm ci` chỉ cài phụ thuộc build CSS.
+Hãy kiểm tra các đường dẫn cục bộ trước khi chạy.
+
+`tests/smoke.cjs` chạy tiện ích với fixture kiểm thử cục bộ trên hai domain gốc.
+Nó dùng profile riêng, CSP trang nghiêm ngặt, worker OCR thật đã đóng gói và thuộc
+tính React giả lập.
+Chạy `node tests/smoke.cjs`.
+Nó cũng gọi `tests/v6-features.cjs` để kiểm tra vòng đời pool/cache/idle của worker
+và roundtrip theme/video; module đó không phải lệnh kiểm thử độc lập.
+Các fixture này không thay thế việc kiểm thử trên phiên EduNext trực tiếp đã đăng
+nhập.
+Bước theme của smoke vẫn chọn `Tối` và mong đợi màu chính xác của preset tối cũ.
+UI hiện tại dùng `Tối` cho mode giao diện và đặt tên preset đó là `Tím`; hãy xem
+lại cặp selector/assertion cũ này trước khi coi kết quả smoke là xác thực UI theme
+hiện tại.
+
+`tests/video-csp.cjs` dùng server fixture HTTPS cục bộ và chứng chỉ kiểm thử được
+tạo ra (không cài chứng chỉ hệ thống).
+Nó so sánh phát video khi rule CSP tắt/bật, kiểm tra wallpaper đã tải lên và URL ở
+cả mode thường lẫn glass, kiểm tra lưu khi tải lại và xác minh host khác vẫn giữ
+CSP.
+Nó cũng cần `node-forge` (`RC_FORGE` có thể trỏ đến đường dẫn module).
+Kiểm thử tự tìm bản sao cô lập tại `.transfer/forge/package`, hoặc dùng module
+`node-forge` đã cài.
+`RC_FORGE` ghi đè cả hai lựa chọn.
+Trong checkout sạch, hãy cài riêng và đặt đường dẫn trong PowerShell:
+
+```powershell
+npm install --prefix .transfer/video-tools node-forge
+$env:RC_FORGE=(Resolve-Path '.transfer/video-tools/node_modules/node-forge').Path
+node tests/video-csp.cjs
+```
+
+Fixture VP8 dài hai giây được đóng gói bằng filter `testsrc2` của FFmpeg.
+
+Các kiểm thử tập trung bổ sung: `node tests/question-text.cjs` kiểm tra văn bản câu
+hỏi/lựa chọn trả lời có thể chọn; `node tests/music.cjs` kiểm tra vòng đời player
+giả lập, YouTube mặc định thu gọn, mở rộng, thu nhỏ/khôi phục và không autoplay
+khi tải lại.
+`tests/fidelity.cjs` kiểm tra văn bản/công thức OCR có thể chọn, khôi phục nguồn
+chính xác, thao tác sao chép, glyph màu nội tuyến và giữ lại sơ đồ thật.
+Nó loại bỏ việc thay ảnh cả dòng; không chứng nhận độ chính xác OCR của emoji hay
+toán học.
+Fixture question-text yêu cầu văn bản câu hỏi/đáp án có thể chọn và loại ảnh cả
+dòng, đồng thời cho phép glyph nội tuyến cạnh các từ có thể chọn.
+Các file `*-TEST-RESULTS.json` hiện có là lịch sử, không phải chứng nhận bản phát
+hành hiện tại.
+
+- `node tests/console-ui.cjs`: đổi kích thước/preset, hủy bằng con trỏ, rollback
+  Escape, điều khiển bàn phím, kích thước đã lưu, giới hạn viewport, tab và theme,
+  gồm vị trí cuối của gạch chân trượt và hành vi reduced-motion.
+- `npm run test:byok`: `llm.cjs`, `bridge-secrets.cjs`, `auto-answer.cjs`,
+  `ai-panel.cjs`, `ai-preview.cjs`, `llm-settings.cjs` và `embedded-api.cjs`.
+  Bao phủ phản hồi API giả lập, lọc bí mật, guard bản nháp/cũ/trùng, vị trí bảng,
+  làm mới xem trước và render văn bản an toàn không gọi nhà cung cấp, các trạng
+  thái, focus quay lại cài đặt, lưu/xóa cài đặt, cô lập iframe/kích thước nội dung
+  và reduced motion.
+  Fixture gửi mô phỏng event nhập liệu; chúng không tải ứng dụng React trực tiếp.
+- `node tests/chat-surfaces.cjs`: nền văn bản tin nhắn người dùng trong suốt và
+  màu icon tiện ích ở mode sáng/tối.
+- `node tests/theme-modes.cjs`: mọi theme nhanh ở sáng/tối, giao diện đã lưu,
+  chuyển ngày/đêm tự động, ghi đè thủ công, độ tương phản menu tài khoản và kiểu
+  hover sidebar.
+- `node tests/theme-style-order.cjs`: tiêu đề tải muộn, tiêu đề bảng và bề mặt
+  wrapper ở cả hai mode, wrapper chỉ dùng cho bố cục trong suốt và độ ưu tiên
+  stylesheet được áp dụng so với style thêm sau có cùng specificity.
+- `node tests/theme-performance.cjs`: 24 lần đổi mode qua handler cài đặt thật;
+  kiểm tra chúng tạo 24 lần cập nhật adopted-sheet và không ghi lại style cũ.
+  Thời gian frame in ra chỉ để chẩn đoán, không phải mục tiêu hiệu năng cố định.
+- `node tests/source-first.cjs`: fixture Node VM cho đối sánh nội dung và fallback.
+- `node tests/source-first-ui.cjs`: mặc định source-first và cài đặt trong trình
+  duyệt.
+- `node tests/rust-parity.cjs`: parity kernel và thời gian cục bộ chỉ chạy trên
+  Node, không phải tốc độ end-to-end.
+  Báo cáo hiện hard-code phiên bản `5.15.0`; trường này không nhận diện phiên bản
+  tiện ích hiện tại.
+
+Mọi kiểm thử trình duyệt dùng chung `tests/lib/browser.cjs`: `RC_PLAYWRIGHT` (đường
+dẫn module Playwright) và `RC_CHROME` (Chrome for Testing) mặc định lần lượt là
+`.transfer/package` và `.transfer/chrome-win64/chrome.exe` nếu có.
+Nếu không, helper phân giải module `playwright` đã cài và executable Chromium mặc
+định của nó.
+Hãy đặt rõ các override khi dùng cặp trình duyệt/công cụ được cài riêng:
+
+```powershell
+$env:RC_PLAYWRIGHT = 'C:\path\to\node_modules\playwright'
+$env:RC_CHROME = 'C:\path\to\chrome-win64\chrome.exe'
+node tests/console-ui.cjs
+```
+
+Mỗi lần chạy dùng profile mới dưới `.transfer/`.
+Một số kiểm thử ghi đè báo cáo trong `tests/results/`; hãy kiểm tra các thay đổi đó
+trước khi commit.
+Profile và screenshot vẫn ở cục bộ.
+Fixture trình duyệt không dùng profile Chrome đã đăng nhập của bạn.
+
+## Xác minh trong lịch sử
+
+Các kết quả bên dưới mô tả công việc trước đây, không phải các kiểm tra được chạy
+lại cho lần rà soát tài liệu ngày 2026-11-17.
+
+Lần theo dõi endpoint tùy chọn và thanh cuộn đã vượt qua build/cú pháp,
+`tests/llm.cjs`, `tests/llm-settings.cjs` và `tests/embedded-api.cjs`.
+Phạm vi gồm phân giải endpoint trống, từ chối endpoint không phải chuỗi, bảo vệ
+không dùng lại key đã lưu của nhà cung cấp tùy chỉnh tại endpoint mặc định, kiểu
+thanh cuộn hiển thị, kích thước frame và giới hạn mobile.
+Không có lệnh gọi nhà cung cấp trực tiếp nào được thực hiện.
+Các kết quả này có trước lần cập nhật chỉ có tài liệu.
+
+Thiết kế lại biểu mẫu API ngày 2026-11-17 đã vượt qua build/cú pháp, cài đặt độc
+lập, API nhúng và kiểm tra xem trước trợ lý.
+Các kiểm tra này bao phủ lưu/tải lại, bảo vệ và xóa key, cô lập/kích thước iframe,
+giới hạn mobile, reduced motion và điều hướng quay lại.
+Ảnh chụp desktop và mobile đã được xem xét.
+Yêu cầu tiếp theo khôi phục animation của nút kích thước đã vượt qua build/cú pháp
+và bộ `tests/console-ui.cjs` gốc, gồm assertion chiều rộng có animation.
+Đổi kích thước trực tiếp vẫn ngay lập tức.
+Các ghi chú cũ về assertion animation chiều rộng thất bại đã bị thay thế; không
+có kiểm thử nào được sửa chỉ để đạt lần vượt qua này.
+
+Công việc UI trước đó đã vượt qua build/cú pháp, kiểm thử BYOK (gồm xem trước câu
+hỏi), điều khiển console, cài đặt độc lập/nhúng và nhạc giả lập.
+Sau lần tinh chỉnh kiểu nút cuối, build/cú pháp, console-ui và embedded-api lại
+vượt qua.
+Ảnh chụp desktop và màn hình hẹp đã được kiểm tra.
+Các kiểm tra này không gửi yêu cầu đến nhà cung cấp trả phí và không gửi câu trả
+lời trên EduNext trực tiếp.
+
+Lỗi preset smoke được sửa ngày 2026-11-14: selector số đã chọn preset Default màu
+trắng sau khi thêm Discord Dark.
+Bản sửa chọn Dark theo tên và xác minh màu trang ngay lập tức cũng như sau khi tải
+lại; việc đổi tên mode-button/preset sau đó cần một cập nhật khác như ghi chú ở
+trên.
+
+Lần theo dõi ngày 2026-11-14 đã vượt qua build/cú pháp, source-first và toàn bộ
+smoke suite (gồm kiểm tra pool/cache/idle v6 và roundtrip theme/video).
+Báo cáo Smoke và V6 đã được làm mới.
+Video/CSP cũng vượt qua cả chín kiểm tra và báo cáo được làm mới cho phiên bản
+2.0.0.
+Kiểm tra fidelity đã vượt qua với contract văn bản và báo cáo được cập nhật.
+Công việc UI trước đó đã vượt qua kiểm tra console và nhạc giả lập.
+Các kiểm tra này không xác lập hành vi EduNext trực tiếp hoặc streaming.
+
+Lần theo dõi animation tab và cập nhật theme đã vượt qua build/cú pháp, UI console,
+theme mode và kiểm tra hồi quy stylesheet trùng.
+Trong 24 lần đổi mode, số lần ghi lại style cũ giảm từ 24 xuống 0 trong khi cập
+nhật adopted-sheet vẫn là 24.
+Các kiểm tra này dùng fixture Chrome cô lập, không dùng trang trực tiếp đã đăng
+nhập.
+
+Nếu cập nhật file runtime, hãy nhấp **Reload** trên thẻ tiện ích và tải lại EduNext.
+Giữ thư mục tiện ích đã giải nén tại chỗ.
+Các chỉnh sửa chỉ có tài liệu không cần build hay tải lại.

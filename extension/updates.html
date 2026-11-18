@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cập nhật · Ultimate RC</title>
+  <link rel="stylesheet" href="console.css">
+  <link rel="stylesheet" href="updates.css">
+  <script src="update-release.js" defer></script>
+  <script src="updates.js" defer></script>
+</head>
+<body class="w">
+  <main>
+    <p class="eyebrow">Ultimate RC tools</p>
+    <h1>Cập nhật tiện ích</h1>
+    <p>Đang dùng <strong id="installed"></strong>. Kiểm tra bản phát hành chính thức trên GitHub và tải ZIP nếu có phiên bản mới hơn.</p>
+    <p id="status" role="status" aria-live="polite">Đang kiểm tra…</p>
+    <div class="actions">
+      <button class="ui-btn" id="check" type="button">Kiểm tra lại</button>
+      <button class="ui-btn" id="download" type="button" hidden>Tải lại ZIP</button>
+      <a href="https://github.com/DCmee-eemCD/Ultimate-RC-tool/releases" target="_blank" rel="noopener noreferrer">Xem bản phát hành</a>
+    </div>
+    <section aria-labelledby="tutorial-title">
+      <h2 id="tutorial-title">Cập nhật nhanh</h2>
+      <p>Tiện ích chưa có trên Chrome Web Store. Sau khi tải ZIP, bạn cần tự thay tệp và tải lại tiện ích.</p>
+      <ol>
+        <li>Giải nén ZIP vừa tải. Tìm thư mục chứa <code>manifest.json</code> (có thể nằm trong thư mục <code>extension</code>).</li>
+        <li>Sao chép toàn bộ nội dung thư mục đó vào <strong>đúng thư mục tiện ích đang dùng</strong>, chọn thay thế tệp trùng tên. Giữ nguyên đường dẫn và không gỡ tiện ích để giữ cài đặt, khóa API.</li>
+        <li>Mở <code>chrome://extensions</code>, bật <strong>Chế độ dành cho nhà phát triển</strong>, rồi bấm biểu tượng <strong>Tải lại ↻</strong> trên thẻ Ultimate RC tools.</li>
+        <li>Làm mới tab EduNext. Kiểm tra số phiên bản mới trên thẻ tiện ích.</li>
+      </ol>
+      <button class="ui-btn" id="extensions" type="button">Mở trang tiện ích Chrome</button>
+      <p id="open-status" role="status"></p>
+    </section>
+  </main>
+</body>
+</html>

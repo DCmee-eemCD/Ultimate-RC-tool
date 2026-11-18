@@ -39,6 +39,22 @@
     return clone.textContent.replace(/^\s*Câu hỏi\s*:?\s*/i, '').replace(/[ \t]+/g, ' ').replace(/\n\s*\n\s*\n/g, '\n\n').trim();
   }
 
+  function messageHints(message) {
+    // Read only the current bot message: feedback can be above or below the
+    // repeated question, with multiple hints or without an explicit hint label.
+    const clone = message.cloneNode(true);
+    const originals = [...message.querySelectorAll('*')];
+    const copies = [...clone.querySelectorAll('*')];
+    originals.forEach((el, index) => {
+      // Keep KaTeX's hidden source annotation for questionText's conversion.
+      if (el.closest('.katex')) return;
+      const style = getComputedStyle(el);
+      if (el.hidden || style.display === 'none' || style.visibility === 'hidden') copies[index].remove();
+    });
+    clone.querySelectorAll('.exercise-question-block, .rc-qbox, button, [role="button"], textarea, input, select, time, img, canvas').forEach(el => el.remove());
+    return questionText(clone);
+  }
+
   function snapshot(composer) {
     if (!visible(composer)) throw new Error('Hãy mở khung chat trước.');
     const chat = composer.closest('.chat-window, .chat-popup, #chat-widget-container');
@@ -50,8 +66,10 @@
     const box = message && [...message.querySelectorAll('.exercise-question-block, .rc-qbox')].filter(visible).at(-1);
     if (!box) throw new Error('Chưa tìm thấy hộp Câu hỏi trong tin nhắn mới nhất. Bật chữ gốc/OCR nếu cần.');
     if ([...box.querySelectorAll('img, canvas')].some(visible)) throw new Error('Câu hỏi có hình. Hiện chỉ hỗ trợ câu hỏi bằng chữ.');
-    const question = questionText(box);
-    if (!question || question.length > 24000) throw new Error('Câu hỏi trống hoặc quá dài.');
+    const text = questionText(box);
+    const hints = messageHints(message);
+    const question = text + (hints ? '\n\nGợi ý / phản hồi từ chatbot:\n' + hints : '');
+    if (!text || question.length > 24000) throw new Error('Câu hỏi trống hoặc quá dài.');
     const submit = composer.querySelector('button[data-intent="SUBMIT_ANSWER"]') || composer.querySelector('button.w-send-btn');
     if (!submit || !visible(submit)) throw new Error('Không tìm thấy nút Nộp câu trả lời.');
     return {chat, editor, box, question, submit, url: location.href, key: location.href + '\n' + question};
@@ -127,6 +145,7 @@
   function mount(main, mainWrapper) {
     const host = document.createElement('div');
     host.className = 'rc-answer-host';
+    host.setAttribute('data-rc-panel-host', '');
     const root = host.attachShadow({mode: 'open'});
     const style = document.createElement('style');
     style.textContent = componentCss;
@@ -137,6 +156,8 @@
     toggle.setAttribute('aria-label', 'Mở bảng AI'); toggle.title = 'Bảng AI';
     toggle.setAttribute('aria-expanded', 'false'); toggle.setAttribute('aria-controls', 'ai-panel');
     const panel = document.createElement('section'); panel.id = 'ai-panel'; panel.hidden = true;
+    panel.setAttribute('data-rc-panel', 'assistant');
+    toggle.setAttribute('data-rc-launcher', '0');
     panel.setAttribute('popover', 'manual'); panel.setAttribute('aria-labelledby', 'ai-title');
     const heading = document.createElement('header'); heading.className = 'ai-heading';
     heading.innerHTML = bot + '<h2 id="ai-title">Trợ lý AI</h2>';
@@ -223,26 +244,15 @@
       toggle.hidden = !shown || open;
       if (!shown) {
         if (panel.matches(':popover-open')) panel.hidePopover();
-        open = false; panel.hidden = true; toggle.setAttribute('aria-expanded', 'false'); return;
+        open = false; panel.hidden = true; toggle.setAttribute('aria-expanded', 'false');
+        window.dispatchEvent(new Event('rc-panel-layout')); return;
       }
       const colors = getComputedStyle(mainWrapper);
       for (const name of ['--bg', '--fg', '--surface', '--line', '--acc', '--secondary', '--mut']) {
         const value = colors.getPropertyValue(name).trim(); if (value) wrapper.style.setProperty(name, value);
       }
       syncFrame();
-      const rect = main.getBoundingClientRect();
-      const right = rect.right + 12;
-      const iconBeside = right + 44 <= innerWidth - 12;
-      toggle.style.left = (iconBeside ? right : innerWidth - 56) + 'px';
-      toggle.style.top = (iconBeside ? Math.max(12, rect.top) : Math.min(innerHeight - 56, rect.bottom + 8)) + 'px';
-      const width = Math.min(340, innerWidth - 24);
-      const beside = right + width <= innerWidth - 12;
-      const left = beside ? right : rect.left - width - 12 >= 12 ? rect.left - width - 12 : Math.max(12, Math.min(rect.left, innerWidth - width - 12));
-      const top = Math.max(12, Math.min(rect.top + (beside ? 0 : 52), innerHeight - 220));
-      // CSS clamps apply immediately on viewport changes, before resize observers run.
-      panel.style.left = `clamp(12px, ${left}px, calc(100dvw - min(340px, 100dvw - 24px) - 12px))`;
-      panel.style.top = `clamp(12px, ${top}px, calc(100dvh - 220px))`;
-      panel.style.maxHeight = `calc(100dvh - clamp(12px, ${top}px, 100dvh - 220px) - 12px)`;
+      window.dispatchEvent(new Event('rc-panel-layout'));
     };
     toggle.addEventListener('click', () => {
       updatePreview();

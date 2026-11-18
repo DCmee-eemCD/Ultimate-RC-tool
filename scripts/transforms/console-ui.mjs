@@ -18,7 +18,7 @@ export async function consoleUI(p, {readText}) {
   p.once('st.textContent = KIT_CSS;', 'st.textContent = KIT_CSS + CONSOLE_CSS;');
 
   const sizeControls = await readText('source/console-size.js');
-  const tabs = (await readText('source/console-ui.js')).replace('        /* CONSOLE_SIZE_CONTROLS */', () => sizeControls);
+  const tabs = (await readText('source/panel-layout.js')) + '\n' + (await readText('source/console-ui.js')).replace('        /* CONSOLE_SIZE_CONTROLS */', () => sizeControls);
   p.between('        const setTab = t => {', "        root.addEventListener('input'", () => tabs + '\n\n');
 
   // Initial markup stays hidden until the stored selection is applied.
