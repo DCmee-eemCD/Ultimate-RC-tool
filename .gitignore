@@ -48,6 +48,7 @@ playwright-report/
 test-results/
 
 # Local development documentation
+/AGENT_README.md
 /CONTEXT.md
 /RULES.md
 
