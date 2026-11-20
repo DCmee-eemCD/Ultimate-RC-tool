@@ -36,7 +36,18 @@
         if (!input) return null;
         if (!emojiSamples) {
             emojiSamples = [];
-            for (const text of ['💡', '🔥', '💪', '👍', '👎', '👏', '🙏', '👉', '👇', '✅', '❌', '❗', '❓', '⚠️', '⭐', '✨', '🎉', '🎯', '📌', '📚', '📝', '😊', '😀', '😂', '🤔', '❤️', '💯', '🚀']) {
+            for (const text of [
+                '💡', '🔥', '💪', '👍', '👎', '👏', '🙏', '👉', '👇', '✅', '❌', '❗', '❓', '⚠️', '⭐', '✨', '🎉', '🎯', '📌', '📚', '📝', '😊', '😀', '😂', '🤔', '❤️', '💯', '🚀',
+                // Hand gestures and encouragement.
+                '👋', '🤚', '🖐️', '✋', '👌', '✌️', '🤞', '🤟', '🤘', '🤙',
+                '👈', '👆', '☝️', '✊', '👊', '🤛', '🤜', '🙌', '👐', '🤝',
+                // Study supplies, paper, documents, and mail.
+                '✏️', '🖊️', '🖋️', '✒️', '🖍️', '📖', '📕', '📗', '📘', '📙',
+                '📓', '📔', '📒', '📃', '📄', '📑', '📋', '📁', '📂', '🗂️',
+                '✉️', '📧', '📩', '📨', '💌', '📎', '🖇️', '📏', '📐', '✂️',
+                // Learning, achievements, and popular reactions.
+                '🎓', '🧠', '🔍', '🏆', '🥇', '🌟', '⚡', '😍', '😎', '🥳',
+            ]) {
                 const sample = document.createElement('canvas');
                 sample.width = sample.height = 64;
                 const ctx = sample.getContext('2d');

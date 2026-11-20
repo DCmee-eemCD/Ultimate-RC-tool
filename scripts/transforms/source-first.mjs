@@ -12,6 +12,15 @@ export function sourceFirst(p) {
   p.once('if (!cfg.wip) return;', 'if (!cfg.wip && !cfg.sourceFirst) return;');
   p.after('const list = pending; pending = [];', '\n            if (!cfg.wip && !cfg.sourceFirst) return;');
   p.once('const res = await ocrUrl(u);', "const res = originalResult(u) || await ocrUrl(u);\n            if (res.original) log('Văn bản gốc: bỏ qua OCR');");
+  p.after("const t = (res && res.text) || '';", "\n            if (!t.trim()) throw new Error('Không đọc được chữ trong ảnh. Hãy thử quét lại.');");
+  // Resource history outlives conversations and can retain expired signed URLs.
+  p.once('const urls = allChatUrls();', `const history = allChatUrls();
+        const current = containers().map(urlOfContainer).filter(u => typeof u === 'string' && RES_RE.test(u));
+        const urls = current.length ? current : history;`);
+  p.once('const mine = urls.filter(u => groupId(u) === id);', `const byPart = new Map();
+        // Retain additional image parts, but let current React URLs win.
+        [...history, ...current].filter(u => groupId(u) === id).forEach(u => byPart.set(partNo(u), u));
+        const mine = [...byPart.values()];`);
   p.before('const cached = combinedFor(id);', `mine.forEach(u => {
             const original = originalResult(u);
             if (!original) return;

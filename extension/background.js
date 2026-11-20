@@ -4,6 +4,19 @@ const trusted=sender=>sender.id===chrome.runtime.id &&
   (sender.url?.startsWith(extensionRoot)||new URL(sender.url||'https://invalid').origin==='https://fsc-edunext.fpt.edu.vn');
 let inboxTail=Promise.resolve();
 let creating;
+let resetting;
+let ocrGeneration=0;
+function resetOcr(){
+  if(resetting)return resetting;
+  ocrGeneration++;
+  resetting=(async()=>{
+    if(creating)await creating;
+    const contexts=await chrome.runtime.getContexts({contextTypes:['OFFSCREEN_DOCUMENT']});
+    if(contexts.length)await chrome.offscreen.closeDocument();
+    await chrome.storage.local.set({rc_ocr_status:{workers:0,langs:'',pending:0},rc_ocr_hub_info:''});
+  })().finally(()=>{resetting=null;});
+  return resetting;
+}
 async function ensureOffscreen(){
   if(creating)return creating;
   creating=(async()=>{
@@ -13,8 +26,12 @@ async function ensureOffscreen(){
   try{await creating;}finally{creating=null;}
 }
 async function offscreen(action,options={}){
+  if(resetting)await resetting;
+  const generation=ocrGeneration;
   await ensureOffscreen();
+  if(generation!==ocrGeneration)throw Error('OCR đã được đặt lại. Hãy quét lại.');
   const r=await chrome.runtime.sendMessage({target:'rc-ocr',action,...options});
+  if(generation!==ocrGeneration)throw Error('OCR đã được đặt lại. Hãy quét lại.');
   if(r?.error)throw Error(r.error);return r?.result;
 }
 function appendJob(job){
@@ -50,6 +67,7 @@ async function handle(m,sender){
       return offscreen('run',{url:m.url,langs:m.langs,threads:m.threads,idle:m.idle,keepWarm:!!m.keepWarm});
     }
     case 'ocr-stop':return offscreen('stop');
+    case 'ocr-reset':await resetOcr();return;
     case 'ocr-heartbeat':return;
     case 'ocr-status':
       if(sender.url!==extensionRoot+'offscreen.html')throw Error('Invalid status sender');

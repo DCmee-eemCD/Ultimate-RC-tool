@@ -18,6 +18,7 @@ async function pool(language,count){
   await status();
 }
 function remember(key,result){
+  if(!result.text?.trim())return;
   const bytes=JSON.stringify(result).length*2;if(bytes>16*1024*1024)return;
   cache.set(key,{result:structuredClone(result),bytes});cacheBytes+=bytes;
   while(cache.size>16||cacheBytes>16*1024*1024){const k=cache.keys().next().value;cacheBytes-=cache.get(k).bytes;cache.delete(k);}

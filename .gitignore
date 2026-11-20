@@ -54,3 +54,4 @@ test-results/
 # Local AI agent configuration
 /.agents/skills/
 /.bug-hunter/
+/.hallmark/

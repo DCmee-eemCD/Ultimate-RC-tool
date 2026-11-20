@@ -935,6 +935,7 @@
             const res = originalResult(u) || await ocrUrl(u);
             if (res.original) log('Văn bản gốc: bỏ qua OCR');
             const t = (res && res.text) || '';
+            if (!t.trim()) throw new Error('Không đọc được chữ trong ảnh. Hãy thử quét lại.');
             textByUrl.set(u, t);
             segByUrl.set(u, (res && res.segments) || (t ? [{ type: 'text', text: t }] : []));
             urlState.set(u, 'done');
@@ -979,10 +980,15 @@
     }
     // Quét ép tin mới nhất (chuột phải vào nút OCR)
     function forceScan() {
-        const urls = allChatUrls();
+        const history = allChatUrls();
+        const current = containers().map(urlOfContainer).filter(u => typeof u === 'string' && RES_RE.test(u));
+        const urls = current.length ? current : history;
         if (!urls.length) { toast('Chưa thấy ảnh câu trả lời nào'); return; }
         const id = groupId(urls[urls.length - 1]);
-        const mine = urls.filter(u => groupId(u) === id);
+        const byPart = new Map();
+        // Retain additional image parts, but let current React URLs win.
+        [...history, ...current].filter(u => groupId(u) === id).forEach(u => byPart.set(partNo(u), u));
+        const mine = [...byPart.values()];
         mine.forEach(u => {
             const original = originalResult(u);
             if (!original) return;
@@ -1654,6 +1660,29 @@ kbd{background:var(--chip);border:1px solid var(--line);border-radius:5px;paddin
         });
         applyDashboardTheme();
 
+        const resetOcrButton = document.createElement('button');
+        resetOcrButton.type = 'button'; resetOcrButton.id = 'rc-ocr-reset';
+        resetOcrButton.className = 'sm wide ui-btn ui-btn-sm';
+        resetOcrButton.textContent = 'Đặt lại OCR';
+        const resetOcrHint = document.createElement('p');
+        resetOcrHint.textContent = 'Dừng OCR trên các tab và tải lại trang này để thử lại. Giữ nguyên cài đặt.';
+        resetOcrHint.id = 'rc-ocr-reset-hint';
+        resetOcrHint.setAttribute('role', 'status');
+        resetOcrButton.setAttribute('aria-describedby', resetOcrHint.id);
+        $('#rk-hubclose').after(resetOcrButton, resetOcrHint);
+        resetOcrButton.addEventListener('click', async () => {
+            resetOcrButton.disabled = true;
+            resetOcrButton.textContent = 'Đang đặt lại OCR…';
+            try {
+                await RC.flush();
+                await RC.ocrReset();
+                location.reload();
+            } catch (error) {
+                resetOcrHint.textContent = 'Không đặt lại được OCR: ' + error.message;
+                resetOcrButton.disabled = false;
+                resetOcrButton.textContent = 'Đặt lại OCR';
+            }
+        });
         $$('.sm').forEach(b => b.classList.add('ui-btn', 'ui-btn-sm'));
         $('.x').classList.add('ui-btn', 'ui-btn-ghost');
         $('.hd b').textContent = 'Ultimate RC';

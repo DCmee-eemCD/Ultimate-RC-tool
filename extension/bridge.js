@@ -59,7 +59,7 @@
         case 'theme-import':
           if(!m.theme || typeof m.theme!=='object')throw new Error('Invalid theme');
           await chrome.storage.local.set({chatKit:m.theme,chatKitBgVid:m.video||''});break;
-        case 'ocr': case 'ocr-stop': case 'open': case 'close': case 'post-job': result=await background(m);break;
+        case 'ocr': case 'ocr-stop': case 'ocr-reset': case 'open': case 'close': case 'post-job': result=await background(m);break;
         default:throw new Error('Unsupported operation');
       }
       send({rcExtension:'response',id:m.id,result});

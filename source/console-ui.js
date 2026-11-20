@@ -110,6 +110,29 @@
         updateGroup.append(updateHeading, updateButton, updateStatus);
         $('.sec[data-sec="feat"]').append(updateGroup);
         /* CONSOLE_SIZE_CONTROLS */
+        const resetOcrButton = document.createElement('button');
+        resetOcrButton.type = 'button'; resetOcrButton.id = 'rc-ocr-reset';
+        resetOcrButton.className = 'sm wide ui-btn ui-btn-sm';
+        resetOcrButton.textContent = 'Đặt lại OCR';
+        const resetOcrHint = document.createElement('p');
+        resetOcrHint.textContent = 'Dừng OCR trên các tab và tải lại trang này để thử lại. Giữ nguyên cài đặt.';
+        resetOcrHint.id = 'rc-ocr-reset-hint';
+        resetOcrHint.setAttribute('role', 'status');
+        resetOcrButton.setAttribute('aria-describedby', resetOcrHint.id);
+        $('#rk-hubclose').after(resetOcrButton, resetOcrHint);
+        resetOcrButton.addEventListener('click', async () => {
+            resetOcrButton.disabled = true;
+            resetOcrButton.textContent = 'Đang đặt lại OCR…';
+            try {
+                await RC.flush();
+                await RC.ocrReset();
+                location.reload();
+            } catch (error) {
+                resetOcrHint.textContent = 'Không đặt lại được OCR: ' + error.message;
+                resetOcrButton.disabled = false;
+                resetOcrButton.textContent = 'Đặt lại OCR';
+            }
+        });
         $$('.sm').forEach(b => b.classList.add('ui-btn', 'ui-btn-sm'));
         $('.x').classList.add('ui-btn', 'ui-btn-ghost');
         $('.hd b').textContent = 'Ultimate RC';
