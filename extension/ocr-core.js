@@ -4,7 +4,7 @@ globalThis.RCOcrReady = (async function () {
     RC.pixelBackend = kernels ? "rust" : "javascript";
     'use strict';
 
-    const HUB_VER = '2.1.0';   // tab hub chạy sẵn KHÔNG tự nạp lại script → khác phiên bản thì phải đóng rồi mở hub mới
+    const HUB_VER = '3.0.0';   // tab hub chạy sẵn KHÔNG tự nạp lại script → khác phiên bản thì phải đóng rồi mở hub mới
     const log = (...a) => console.log('%c[RC]', 'color:#f59e0b', ...a);
 // Repair only recognizable English pronoun contexts, never arbitrary bars.
     function repairOcrText(text) {

@@ -4,7 +4,7 @@
 
 # Ultimate RC tools — Chrome extension
 
-Current version: **2.1.0**. Requires **Chrome 116 or newer**.
+Current version: **3.0.0**. Requires **Chrome 116 or newer**.
 
 Ultimate RC tools customizes EduNext's appearance, recovers original message text
 when available, provides local Vietnamese/English OCR, adds background music,
@@ -20,7 +20,7 @@ may display Vietnamese labels. The Vietnamese section uses those labels.
 ### 1. Download and extract
 
 1. Open the [GitHub Releases page](https://github.com/DCmee-eemCD/Ultimate-RC-tool/releases).
-2. Under the release's **Assets**, download **Ultimate-RC-tools-v2.0.0-unpacked.zip**
+2. Under the release's **Assets**, download **Ultimate-RC-tools-v3.0.0-unpacked.zip**
    (or the equivalent unpacked ZIP for a newer version).
 3. Extract the downloaded archive into a permanent folder, such as
    `Documents/Ultimate-RC-tools`. Keep this folder
@@ -53,6 +53,15 @@ The manifest requires Chrome 116 or newer.
 2. Look for the **Fe logo** settings launcher and text button at the bottom left.
 3. Click the Fe logo or press **Alt+C** to open settings. Press **Esc** to close
    them unless cancelling a resize drag.
+
+When the settings panel is open, the **Command** launcher sits above Assistant.
+Click it or press **Alt+K** to run explicit shortcuts without hunting through tabs.
+Run `help theme` to see six palette previews. Click a preview to apply its matching
+`theme ...` command; it is added to command history just like typed commands, so
+`history` (or the Up arrow) can recall it. `help preset` and `help palette` are
+aliases for the same theme help. Try `help`, `tab text`, `theme discord`, `ocr on`,
+`assistant`, `music`, or `updates`; unknown commands stay visible as errors instead
+of being run.
 
 For a stuck OCR session, open **Text → Reset OCR**. This stops OCR across
 tabs and reloads the current EduNext page, clearing its OCR queue while keeping
@@ -171,6 +180,11 @@ API calls run in the extension background, not through the page's message bridge
 
 - Three settings tabs: **Appearance**, **Utilities**, and **Text**.
   **Music** opens from its own music-note button beside the Assistant launcher.
+  The **Command** launcher sits above Assistant and opens a searchable command
+  window with help, history, errors, and shortcuts for existing settings actions.
+  `help theme` (also `help preset` or `help palette`) shows six clickable palette
+  previews; each click applies the corresponding theme command and records it in
+  command history for recall.
   Each tab opens with a short description; flat settings rows and sentence-case
   group headings keep the controls easy to scan. Horizontal palette choices and
   flat color rows share the same saved theme colors. Wide panels arrange related
@@ -333,7 +347,7 @@ music streaming, or paid-provider behavior.
 
 # Ultimate RC tools — tiện ích Chrome
 
-Phiên bản hiện tại: **2.1.0**. Yêu cầu **Chrome 116 trở lên**.
+Phiên bản hiện tại: **3.0.0**. Yêu cầu **Chrome 116 trở lên**.
 
 Ultimate RC tools tùy biến giao diện EduNext, khôi phục văn bản tin nhắn gốc khi
 có thể, cung cấp OCR tiếng Việt/Anh cục bộ, thêm nhạc nền và tự động trả lời câu
@@ -347,7 +361,7 @@ Tài liệu này dành cho người dùng và nhà phát triển. AI hỗ trợ 
 ### 1. Tải xuống và giải nén
 
 1. Mở [trang GitHub Releases](https://github.com/DCmee-eemCD/Ultimate-RC-tool/releases).
-2. Trong **Tài sản** của bản phát hành, tải **Ultimate-RC-tools-v2.0.0-unpacked.zip**
+2. Trong **Tài sản** của bản phát hành, tải **Ultimate-RC-tools-v3.0.0-unpacked.zip**
    (hoặc ZIP unpacked tương đương của phiên bản mới hơn).
 3. Giải nén archive đã tải vào một thư mục cố định, chẳng hạn
    `Documents/Ultimate-RC-tools`.
@@ -380,6 +394,13 @@ Manifest yêu cầu Chrome 116 trở lên.
 2. Tìm launcher cài đặt **logo Fe** và nút văn bản ở góc dưới bên trái.
 3. Nhấp logo Fe hoặc nhấn **Alt+C** để mở cài đặt.
    Nhấn **Esc** để đóng, trừ khi bạn đang hủy thao tác kéo đổi kích thước.
+
+Khi bảng cài đặt đang mở, launcher **Lệnh** nằm phía trên Trợ lý. Nhấp vào đó
+hoặc nhấn **Alt+K** để chạy lệnh nhanh. Gõ `help theme` để xem sáu bản xem trước
+bảng màu. Nhấp một bản để áp dụng lệnh `theme ...`; lệnh này được thêm vào lịch sử
+như lệnh đã gõ, nên `history` hoặc phím Mũi tên lên có thể gọi lại. `help preset`
+và `help palette` là bí danh của phần trợ giúp theme. Các lệnh chưa biết vẫn hiện
+thành lỗi và không được chạy.
 
 Nút văn bản hiển thị **Chữ gốc** ở chế độ source-first hoặc **OCR** ở chế độ OCR.
 Nhấp phải vào nút này để quét ảnh được quan sát gần nhất.
@@ -519,6 +540,9 @@ trang.
 
 - Có ba tab cài đặt: **Giao diện**, **Tiện ích** và **Văn bản**.
   **Nhạc** mở bằng nút nốt nhạc riêng cạnh nút Trợ lý.
+  Launcher **Lệnh** nằm phía trên Trợ lý; `help theme` (hoặc `help preset` /
+  `help palette`) hiển thị sáu bản xem trước bảng màu có thể nhấp để áp dụng.
+  Mỗi lần nhấp chạy lệnh theme tương ứng và lưu vào lịch sử lệnh để gọi lại.
   Mỗi tab mở ra với mô tả ngắn; các hàng cài đặt phẳng và tiêu đề nhóm theo kiểu
   sentence-case giúp dễ quét.
   Các lựa chọn bảng màu ngang và hàng màu phẳng dùng chung màu theme đã lưu.

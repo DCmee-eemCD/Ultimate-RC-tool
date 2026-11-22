@@ -16,7 +16,7 @@
         const musicIcon = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-eighth-notes preview-icon" aria-hidden="true"><path d="M21 16V3a1 1 0 0 0-1.28-.96l-10 2.917a1 1 0 0 0-.72.96V19"/><circle cx="18" cy="16" r="3"/><circle cx="6" cy="19" r="3"/></svg>';
         const musicToggle = document.createElement('button');
         musicToggle.id = 'rc-music-toggle'; musicToggle.type = 'button'; musicToggle.className = 'ui-btn';
-        musicToggle.setAttribute('data-rc-launcher', '1');
+        musicToggle.setAttribute('data-rc-launcher', '2');
         musicToggle.innerHTML = musicIcon; musicToggle.title = 'Nhạc';
         musicToggle.setAttribute('aria-label', 'Mở bảng nhạc');
         musicToggle.setAttribute('aria-controls', musicSettings.id);
@@ -188,3 +188,4 @@
             if (next < 0) return;
             e.preventDefault(); tabButtons[next].focus();
         });
+        /* RC_COMMAND_WINDOW */

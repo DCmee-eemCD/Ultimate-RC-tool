@@ -30,11 +30,14 @@
             const launchers = roots.flatMap(r => [...r.querySelectorAll('[data-rc-launcher]')]);
             launchers.sort((a, b) => Number(a.dataset.rcLauncher) - Number(b.dataset.rcLauncher));
             let slot = 0;
+            const visibleLauncherCount = launchers.filter(el => !el.hidden).length;
             for (const el of launchers) {
                 if (el.hidden) continue;
                 const beside = edge + 44 <= innerWidth - 12;
-                placements.push({el, left:beside ? edge : innerWidth - 56 - slot * 52,
-                    top:beside ? Math.min(innerHeight - 56, top + slot * 52) : Math.min(innerHeight - 56, rect.bottom + 8)});
+                // Command is sorted first, so the narrow fallback keeps it
+                // above Assistant instead of spreading launchers horizontally.
+                placements.push({el, left:beside ? edge : Math.max(12, Math.min(edge, innerWidth - 56)),
+                    top:beside ? Math.min(innerHeight - 56, top + slot * 52) : Math.max(12, Math.min(innerHeight - 56, rect.bottom + 8 - (visibleLauncherCount - slot) * 52))});
                 slot++;
             }
             // Read moving positions together before writing any layout styles.

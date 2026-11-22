@@ -157,7 +157,7 @@
     toggle.setAttribute('aria-expanded', 'false'); toggle.setAttribute('aria-controls', 'ai-panel');
     const panel = document.createElement('section'); panel.id = 'ai-panel'; panel.hidden = true;
     panel.setAttribute('data-rc-panel', 'assistant');
-    toggle.setAttribute('data-rc-launcher', '0');
+    toggle.setAttribute('data-rc-launcher', '1');
     panel.setAttribute('popover', 'manual'); panel.setAttribute('aria-labelledby', 'ai-title');
     const heading = document.createElement('header'); heading.className = 'ai-heading';
     heading.innerHTML = bot + '<h2 id="ai-title">Trợ lý AI</h2>';

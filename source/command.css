@@ -1,0 +1,47 @@
+/* Hallmark · shape: app screen · genre: modern-minimal · theme: existing terminal · redesign: restyle · v2.0.0 */
+/* Hallmark · pre-emit critique: P4 H4 E4 S3 R5 V3 · weakest: specificity; retained real command prompts and help. */
+:root, :host {
+  --color-command-bg:#12161d; --color-command-surface:#1c222c; --color-command-fg:#dbe2ed;
+  --color-command-muted:#a3afc0; --color-command-line:#343e4d; --color-command-accent:#9bc8fa;
+  --color-command-action:#ead5ee; --color-command-action-ink:#382d40; --color-command-error:#ffb8ad;
+}
+.w .rc-command-panel{position:fixed;inset:auto;margin:0;box-sizing:border-box;width:min(340px,calc(100dvw - 24px));height:500px;max-height:calc(100dvh - 24px);overflow:hidden;padding:0;background:var(--color-command-bg);color:var(--color-command-fg);border:1px solid var(--color-command-line);border-radius:var(--rc-radius);box-shadow:var(--rc-shadow-small);font:14px/1.5 var(--font-body);pointer-events:auto;color-scheme:dark}
+.w .rc-command-panel:popover-open{display:flex;flex-direction:column}
+.w .rc-command-heading{display:flex;align-items:center;gap:var(--space-xs);flex:none;padding:var(--space-2xs) var(--space-sm);border-bottom:1px solid var(--color-command-line)}
+.w .rc-command-heading h2{flex:1;min-width:0;overflow-wrap:break-word;text-wrap:balance;margin:0;font-size:16px;font-weight:600;color:var(--color-command-fg)}
+.w .rc-terminal-icon{display:flex;color:var(--color-command-muted)}
+.w .rc-terminal-icon svg{width:20px;height:20px}
+.w .rc-command-kicker{font-size:12px;color:var(--color-command-muted)}
+.w .rc-command-heading .ui-btn{width:44px;height:44px;min-height:44px;padding:0;border:0;background:transparent;color:var(--color-command-muted);box-shadow:none;font-size:24px}
+.w .rc-command-heading .ui-btn:hover{background:var(--color-command-surface);color:var(--color-command-fg)}
+.w .rc-command-body{display:flex;flex-direction:column;flex:1;min-height:0;padding:0}
+.w .rc-command-history{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;margin:0;padding:var(--space-md);list-style:none;scrollbar-width:thin;scrollbar-color:var(--color-command-line) var(--color-command-bg)}
+.w .rc-command-line{margin:0;padding:0;color:var(--color-command-fg);font-size:14px;line-height:1.55;white-space:pre-wrap;overflow-wrap:anywhere}
+.w .rc-command-line.input{margin-top:var(--space-md);margin-bottom:var(--space-2xs);color:var(--color-command-accent);font-weight:600}
+.w .rc-command-line.error{color:var(--color-command-error)}
+.w .rc-command-theme-help{margin-block:10px 4px;white-space:normal}
+.w .rc-command-theme-help h3{margin:0;color:var(--color-command-fg);font-size:16px;line-height:1.4;font-weight:600}
+.w .rc-command-theme-help p{margin:4px 0 12px;color:var(--color-command-muted);font-size:12px;line-height:1.5}
+.w .rc-command-theme-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:0;padding:0;list-style:none}
+.w .rc-command-theme-grid li{min-width:0}
+.w .rc-command-theme-choice{display:flex;flex-direction:column;align-items:stretch;gap:3px;box-sizing:border-box;width:100%;min-height:82px;padding:9px;border:1px solid var(--color-command-line);border-radius:8px;background:var(--color-command-surface);color:var(--color-command-fg);font:inherit;text-align:left;cursor:pointer}
+.w .rc-command-theme-choice:hover{border-color:var(--color-command-accent);background:var(--color-command-bg)}
+.w .rc-command-theme-swatches{display:flex;overflow:hidden;height:12px;margin-bottom:4px;border-radius:3px;box-shadow:0 0 0 1px var(--color-command-line)}
+.w .rc-command-theme-swatches span{flex:1}
+.w .rc-command-theme-name{font-size:13px;line-height:1.4;font-weight:600}
+.w .rc-command-theme-choice code{color:var(--color-command-muted);font:11px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace;overflow-wrap:anywhere}
+.w .rc-command-search{flex:none;padding:var(--space-sm);border-top:1px solid var(--color-command-line)}
+.w .rc-command-search form{display:flex;align-items:center;gap:var(--space-xs);margin:0}
+.w .rc-command-search .ui-input{box-sizing:border-box;flex:1;min-width:0;width:100%;height:44px;min-height:44px;padding:0 var(--space-sm);border:1px solid var(--color-command-line);border-radius:var(--rc-radius);background:var(--color-command-surface);color:var(--color-command-fg);font:14px/1.5 var(--font-body);box-shadow:none}
+.w .rc-command-search .ui-input::placeholder{color:var(--color-command-muted);opacity:1}
+.w .rc-command-search .ui-input:hover{border-color:var(--color-command-muted)}
+.w .rc-terminal-submit.ui-btn{flex:none;width:52px;height:44px;min-height:44px;padding:0;border:0;border-radius:var(--rc-radius);background:var(--color-command-action);color:var(--color-command-action-ink);font:600 13px/1 var(--font-body);box-shadow:none}
+.w .rc-terminal-submit.ui-btn:hover{background:var(--color-command-fg)}
+.w .rc-command-panel button:active{transform:translateY(1px)}
+.w .rc-command-panel button:disabled{opacity:.5;cursor:not-allowed;transform:none}
+.w .rc-command-panel [aria-busy=true]{cursor:progress}
+.w .rc-command-panel :is(button,input,[tabindex]):focus-visible{outline:2px solid var(--color-command-accent);outline-offset:2px}
+.w .rc-command-help{flex:none;margin:0;padding:0 var(--space-sm) var(--space-sm);font-size:12px;color:var(--color-command-muted)}
+.w .rc-terminal-prompt,.w .rc-command-suggestions{display:none}
+.w .rc-command-label,.w .rc-command-status{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+@media(prefers-reduced-motion:reduce){.w .rc-command-panel button:active{transform:none}}
