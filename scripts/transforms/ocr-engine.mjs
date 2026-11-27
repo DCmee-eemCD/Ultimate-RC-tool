@@ -64,10 +64,37 @@ ${replaceOnce(js, cropInit, '', SCOPE)}            }
 }
 
 /** @param engineSource userscript text before the feature boundary */
-export function buildOcrEngine(engineSource, version, fidelitySource = '') {
+export function buildOcrEngine(engineSource, version, fidelitySource = '', tableSource = '') {
   const p = new Patch(engineSource + '\n})();\n', SCOPE);
   extensionRuntime(p);
   rustKernels(p);
+  if (tableSource.trim()) {
+    p.after("    const log = (...a) => console.log('%c[RC]', 'color:#f59e0b', ...a);", '\n' + tableSource + '\n');
+    p.before('        const data = await recognizeStrips', `        const tables = await extractOcrTables(orig, c, recognize, scale, par || 1);
+        // Accepted cells are read separately. Remove their pixels from both
+        // working canvases so general OCR cannot duplicate or rasterize them.
+        for (const table of tables) {
+            for (const context of [x, ox]) {
+                context.fillStyle = '#fff';
+                context.fillRect(table.x0 - 2 * scale, table.y0 - 2 * scale,
+                    table.x1 - table.x0 + 4 * scale, table.y1 - table.y0 + 4 * scale);
+            }
+        }
+`);
+    p.after('        const data = await recognizeStrips(c, x, recognize, par || 1);', '\n        data.rcTables = tables;');
+    p.once('.concat(figs).sort', '.concat(figs, data.rcTables || []).sort');
+    p.after('        items.forEach(it => {', `
+            if (it.rows) {
+                flush();
+                segs.push({type:'table', rows:it.rows, header:it.header,
+                    text:it.rows.map(row => row.map(cell => cell.replace(/\\s+/g, ' ').trim()).join('\\t')).join('\\n')});
+                return;
+            }`);
+    // Preserve this anchor for the shared core's text-fidelity transform.
+    p.once("const text = segs.filter(g => g.type === 'text').map(g => g.text).join('\\n\\n');",
+      "const text = segs.filter(g => g.type === 'text').map(g => g.text).join('\\n\\n');\n        const tableText = segs.filter(g => g.type === 'text' || g.type === 'table' || g.preserved).map(g => g.preserved ? g.copyText : g.text).join('\\n\\n');");
+    p.once('return { text, segments: segs,', "return { text: segs.some(g => g.type === 'table') ? tableText : text, segments: segs,");
+  }
   if (fidelitySource.trim()) {
     p.after("    const log = (...a) => console.log('%c[RC]', 'color:#f59e0b', ...a);",
       `\n${fidelitySource.trim()}\n`);

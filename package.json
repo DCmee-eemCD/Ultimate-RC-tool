@@ -4,6 +4,7 @@
     "build": "node build.mjs",
     "check": "node --check extension/app.js && node --check extension/ocr-core.js && node --check extension/ocr-engine.js && node --check extension/auto-answer.js && node --check extension/llm-endpoint.js && node --check extension/llm.js && node --check extension/llm-settings.js && node --check extension/background.js && node --check extension/bridge.js && node --check extension/runtime.js && node --check extension/update-release.js && node --check extension/updates.js",
     "test": "node tests/source-first.cjs",
+    "test:ocr-tables": "node tests/ocr-tables-detect.cjs && node tests/ocr-tables.cjs && node tests/ocr-table-style.cjs",
     "test:byok": "node tests/llm.cjs && node tests/bridge-secrets.cjs && node tests/auto-answer.cjs && node tests/ai-panel.cjs && node tests/ai-preview.cjs && node tests/llm-settings.cjs && node tests/embedded-api.cjs"
   },
   "devDependencies": {

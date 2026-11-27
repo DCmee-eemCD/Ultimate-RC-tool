@@ -19,6 +19,15 @@ const FIDELITY_NOTE = `
         if(!tex && segs?.some(g=>g.preserved)) { const note=document.createElement('small'); note.className='rc-fidelity-note'; note.textContent='Ký hiệu chưa đọc chắc: giữ ảnh; Copy có đánh dấu.'; bar.appendChild(note); }`;
 
 export async function textSource(p, {readText}) {
+  p.before('    function applyToContainer(', (await readText('source/ocr-table-render.js')) + '\n');
+  p.after('            segs.forEach(g => {', "\n                if (g.type === 'table') { renderOcrTable(body, g); return; }");
+  p.before('            .rc-ocr-fig {', `            .rc-ocr-table-wrap { max-width:100%; overflow:auto; margin:10px 0; white-space:normal; background:#fff !important; color:#1f2937 !important; }
+            .rc-ocr-table-wrap:focus-visible { outline:2px solid currentColor; outline-offset:2px; }
+            html body .rc-ocr-table { width:100%; table-layout:fixed; border-collapse:collapse; border-spacing:0; color:#1f2937 !important; background:#fff !important; font-family:inherit; font-size:1rem; line-height:1.5; }
+            html body .rc-ocr-table :is(thead,tbody,tr) { background:#fff !important; color:#1f2937 !important; }
+            html body .rc-ocr-table th, html body .rc-ocr-table td { border:1px solid #9ca3af !important; padding:9px 10px; text-align:start; vertical-align:top; white-space:pre-wrap; overflow-wrap:anywhere; background:#fff !important; color:#1f2937 !important; font-weight:400; box-shadow:none !important; }
+            html body .rc-ocr-table th { font-weight:700; background:#e5e7eb !important; }
+`);
   const recovery = await readText('source/text-source.js');
   p.between('    const TEX_RE =', '    function probeLatex()', () => recovery + '\n');
   p.once("filter(g => g.type === 'img')", "filter(g => g.type === 'img' && !g.preserved)");

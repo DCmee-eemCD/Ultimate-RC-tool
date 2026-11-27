@@ -4,7 +4,7 @@
 
 # Ultimate RC tools — Chrome extension
 
-Current version: **3.0.0**. Requires **Chrome 116 or newer**.
+Current version: **4.0.0**. Requires **Chrome 116 or newer**.
 
 Ultimate RC tools customizes EduNext's appearance, recovers original message text
 when available, provides local Vietnamese/English OCR, adds background music,
@@ -20,7 +20,7 @@ may display Vietnamese labels. The Vietnamese section uses those labels.
 ### 1. Download and extract
 
 1. Open the [GitHub Releases page](https://github.com/DCmee-eemCD/Ultimate-RC-tool/releases).
-2. Under the release's **Assets**, download **Ultimate-RC-tools-v3.0.0-unpacked.zip**
+2. Under the release's **Assets**, download **Ultimate-RC-tools-v4.0.0-unpacked.zip**
    (or the equivalent unpacked ZIP for a newer version).
 3. Extract the downloaded archive into a permanent folder, such as
    `Documents/Ultimate-RC-tools`. Keep this folder
@@ -72,6 +72,13 @@ Right-click it to scan the latest observed image. OCR runs locally and needs no
 API key. The optional AI assistant needs your own provider settings; see
 [BYOK short answers](#byok-short-answers).
 
+OCR redraws simple tables with complete row and column borders as selectable
+cells. Copy includes the cells in row order, separated by tabs. Unrecognized or
+unsupported grids keep the usual OCR/image fallback; merged cells are not rebuilt.
+Whole-page screenshots with a dark wallpaper can also use that fallback; use the
+original answer image for best results.
+Reload the extension and refresh EduNext before scanning to use this behavior.
+
 ### Update an existing installation
 
 1. Open **Utilities → Check for updates** to download a newer ZIP, or download
@@ -98,6 +105,17 @@ its saved settings. You do not need to remove and reinstall it.
   userscript or any duplicate installation, then refresh EduNext.
 - **Extension stopped working after moving files:** restore the extracted folder
   to its original location, then reload the extension.
+
+## Copy answer images
+
+In **Utilities**, enable **Allow copy / right-click / text selection**
+(`Cho phép copy / chuột phải / chọn chữ`). Move the pointer onto the original
+answer image, right-click, and choose Chrome's **Copy image**. Left-click still
+opens EduNext's enlarged view. This copies the image, not its recognized text.
+
+After installing the image-copy fix, click **Reload** on Ultimate RC tools at
+`chrome://extensions`, then refresh EduNext. The fix covers answer images in the
+chat; it does not unlock arbitrary protected canvases on other pages.
 
 ## Check for updates
 
@@ -335,7 +353,9 @@ directly. See [the maintenance reference](AGENT_README.md#development) for the
 file map, browser-test setup, and release caveats.
 
 `npm run check` checks script syntax; `npm test` runs only Node source-first
-fixtures. `npm run test:byok` checks AI/provider fixtures and
+fixtures. `npm run test:ocr-tables` checks grid detection, safe fallback, local
+OCR, selectable cells, copying order, and narrow-screen layout.
+`npm run test:byok` checks AI/provider fixtures and
 `node tests/updates.cjs` checks the updater. Browser tests require separately
 installed Playwright and Chrome for Testing; `npm ci` installs CSS build
 dependencies only. Fixture results do not certify signed-in EduNext, live
@@ -347,7 +367,7 @@ music streaming, or paid-provider behavior.
 
 # Ultimate RC tools — tiện ích Chrome
 
-Phiên bản hiện tại: **3.0.0**. Yêu cầu **Chrome 116 trở lên**.
+Phiên bản hiện tại: **4.0.0**. Yêu cầu **Chrome 116 trở lên**.
 
 Ultimate RC tools tùy biến giao diện EduNext, khôi phục văn bản tin nhắn gốc khi
 có thể, cung cấp OCR tiếng Việt/Anh cục bộ, thêm nhạc nền và tự động trả lời câu
@@ -361,7 +381,7 @@ Tài liệu này dành cho người dùng và nhà phát triển. AI hỗ trợ 
 ### 1. Tải xuống và giải nén
 
 1. Mở [trang GitHub Releases](https://github.com/DCmee-eemCD/Ultimate-RC-tool/releases).
-2. Trong **Tài sản** của bản phát hành, tải **Ultimate-RC-tools-v3.0.0-unpacked.zip**
+2. Trong **Tài sản** của bản phát hành, tải **Ultimate-RC-tools-v4.0.0-unpacked.zip**
    (hoặc ZIP unpacked tương đương của phiên bản mới hơn).
 3. Giải nén archive đã tải vào một thư mục cố định, chẳng hạn
    `Documents/Ultimate-RC-tools`.
@@ -408,6 +428,13 @@ OCR chạy cục bộ và không cần API key.
 Trợ lý AI tùy chọn cần cài đặt nhà cung cấp của bạn; xem
 [Trả lời ngắn bằng BYOK](#vi-byok).
 
+OCR dựng lại bảng đơn giản có đầy đủ đường kẻ hàng/cột thành các ô có thể chọn
+chữ. Khi sao chép, các ô được xếp theo hàng và ngăn bằng tab. Bảng không nhận
+dạng được hoặc có ô gộp vẫn dùng cách đọc/giữ ảnh thông thường. Tải lại tiện ích
+và làm mới EduNext trước khi quét để dùng tính năng này.
+Ảnh chụp cả trang có hình nền tối cũng có thể dùng phương án dự phòng; nên quét
+ảnh câu trả lời gốc để có kết quả tốt nhất.
+
 ### Cập nhật bản cài đặt hiện có
 
 1. Mở **Tiện ích → Kiểm tra cập nhật** để tải ZIP mới hơn, hoặc tải thủ công
@@ -438,6 +465,17 @@ và tải lại trang EduNext hiện tại, giữ nguyên cài đặt. Sau đó 
   bản cài trùng, rồi làm mới EduNext.
 - **Tiện ích ngừng hoạt động sau khi di chuyển file:** đưa thư mục đã giải nén về
   vị trí ban đầu, rồi tải lại tiện ích.
+
+## Sao chép ảnh câu trả lời
+
+Trong **Tiện ích**, bật **Cho phép copy / chuột phải / chọn chữ**. Di chuột lên
+ảnh câu trả lời gốc, nhấp chuột phải rồi chọn **Sao chép hình ảnh** của Chrome.
+Nhấp chuột trái vẫn mở chế độ phóng to của EduNext. Thao tác này sao chép ảnh,
+không phải phần văn bản đã nhận dạng.
+
+Sau khi cài bản sửa lỗi sao chép ảnh, nhấn **Tải lại** trên thẻ Ultimate RC tools
+tại `chrome://extensions`, rồi tải lại EduNext. Bản sửa áp dụng cho ảnh câu trả
+lời trong chat, không mở khóa mọi canvas bị bảo vệ trên các trang khác.
 
 ## Kiểm tra cập nhật
 
@@ -716,7 +754,9 @@ Xem [tài liệu bảo trì](AGENT_README.md#development) để biết chi tiế
 thiết lập kiểm thử trình duyệt và lưu ý phát hành.
 
 `npm run check` kiểm tra cú pháp; `npm test` chỉ chạy kiểm thử ưu tiên nguồn trên
-Node. `npm run test:byok` kiểm tra AI/nhà cung cấp bằng dữ liệu mô phỏng và
+Node. `npm run test:ocr-tables` kiểm tra nhận dạng đường kẻ, phương án dự phòng,
+OCR cục bộ, ô có thể chọn chữ, thứ tự sao chép và bố cục màn hình hẹp.
+`npm run test:byok` kiểm tra AI/nhà cung cấp bằng dữ liệu mô phỏng và
 `node tests/updates.cjs` kiểm tra cập nhật. Kiểm thử trình duyệt cần cài riêng
 Playwright và Chrome for Testing; `npm ci` chỉ cài phụ thuộc build CSS.
 Kết quả mô phỏng không xác nhận hoạt động trên EduNext đã đăng nhập,

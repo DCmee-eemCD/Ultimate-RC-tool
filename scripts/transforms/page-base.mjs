@@ -42,6 +42,7 @@ export function buildPageBase(features, version) {
 
   // Page-world canvas interception starts before asynchronous storage is loaded.
   p.once('const od = P.drawImage;', 'const od = RC.originalDrawImage;');
+  p.after('        P.drawImage = function (s, ...a) {', '\n            RC.recordCanvasImage(this.canvas, s);');
   p.before('    // =====================================================================\n    // 5.', '    RC.earlyUrls.splice(0).forEach(noteUrl);\n\n');
 
   // Do not let anti-copy capture swallow the extension dock's own right-click handler.

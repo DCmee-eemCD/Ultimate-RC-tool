@@ -3,6 +3,8 @@
   if (window !== window.top) return;
   const componentCss = /* RC_ANSWER_CSS */;
   const sent = new Set();
+  const messageIds = new WeakMap();
+  let nextMessageId = 0;
   let task = null;
   const visible = el => !!el?.isConnected && el.getClientRects().length > 0 && getComputedStyle(el).visibility !== 'hidden';
   const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -61,10 +63,22 @@
     if (!chat) throw new Error('Không xác định được cuộc trò chuyện.');
     const editor = [...composer.querySelectorAll('textarea')].find(visible);
     if (!editor || editor.disabled || editor.readOnly) throw new Error('Chuyển ô nhập sang Text và chờ chat sẵn sàng.');
-    const messages = [...chat.querySelectorAll('.message-container.message-assistant')].filter(visible);
+    const messages = [...chat.querySelectorAll('.message-container')].filter(visible);
     const message = messages.at(-1);
+    if (!message?.matches('.message-assistant')) throw new Error('Đang chờ tin nhắn mới từ chatbot.');
     const box = message && [...message.querySelectorAll('.exercise-question-block, .rc-qbox')].filter(visible).at(-1);
-    if (!box) throw new Error('Chưa tìm thấy hộp Câu hỏi trong tin nhắn mới nhất. Bật chữ gốc/OCR nếu cần.');
+    if (!box) {
+      const text = messageHints(message);
+      // Never acknowledge unreadable media or a plain-text question as a statement.
+      const isQuestion = /[?？]|(?:^|[.!\n]\s*)(?:who|what|when|where|why|how|which|can|could|would|will|do|does|did|is|are)\b|\b(?:calculate|solve|find|determine)\b|(?:câu hỏi|bao nhiêu|tại sao|vì sao|thế nào|hay không|đúng không|hãy tính|hãy giải)/iu.test(text);
+      if (!text || isQuestion || message.querySelector('img, canvas, [aria-busy="true"]'))
+        throw new Error('Chưa tìm thấy hộp Câu hỏi trong tin nhắn mới nhất. Bật chữ gốc/OCR nếu cần.');
+      const submit = composer.querySelector('button.w-send-btn') || composer.querySelector('button[data-intent="SUBMIT_ANSWER"]');
+      if (!submit || !visible(submit)) throw new Error('Không tìm thấy nút gửi.');
+      if (!messageIds.has(message)) messageIds.set(message, ++nextMessageId);
+      return {chat, editor, box: message, question: text, submit, acknowledgement: true,
+        url: location.href, key: location.href + '\nOK:' + messageIds.get(message)};
+    }
     if ([...box.querySelectorAll('img, canvas')].some(visible)) throw new Error('Câu hỏi có hình. Hiện chỉ hỗ trợ câu hỏi bằng chữ.');
     const text = questionText(box);
     const hints = messageHints(message);
@@ -75,7 +89,7 @@
     return {chat, editor, box, question, submit, url: location.href, key: location.href + '\n' + question};
   }
 
-  async function answer(composer, status, answerButton, stopButton) {
+  async function answer(composer, status, answerButton, stopButton, onStart = () => {}) {
     if (task) { status.textContent = 'Đang xử lý một câu hỏi. Hãy chờ hoặc dừng yêu cầu đó.'; return; }
     let initial;
     try {
@@ -83,7 +97,10 @@
       if (initial.editor.value.trim()) throw new Error('Ô nhập đang có nội dung. Hãy gửi hoặc xóa bản nháp trước.');
       if (sent.has(initial.key)) throw new Error('Câu hỏi này đã được bấm nộp. Chờ câu hỏi mới để tránh gửi trùng.');
     } catch (error) { status.dataset.state = 'error'; status.textContent = error.message; return; }
+    onStart(initial.key);
     const active = {cancelled: false, edited: false};
+    let filledAcknowledgement = false;
+    let submitted = false;
     task = active;
     status.dataset.state = 'working';
     answerButton.setAttribute('aria-busy', 'true');
@@ -101,13 +118,14 @@
     };
     try {
       status.textContent = 'Đang đọc Câu hỏi và tạo câu trả lời ngắn…';
-      const result = await call({op: 'llm-answer', question: initial.question});
+      const result = initial.acknowledgement ? {answer: 'ok'} : await call({op: 'llm-answer', question: initial.question});
       const text = result?.answer?.trim();
       if (!text || text.length > 4000) throw new Error('Mô hình không trả về câu trả lời hợp lệ.');
       check();
       if (initial.editor.value.trim()) throw new Error('Ô nhập đã có nội dung. Không thay bản nháp.');
       // Use the native setter to notify React rather than changing its value tracker.
       Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(initial.editor, text);
+      filledAcknowledgement = !!initial.acknowledgement;
       initial.editor.dispatchEvent(new Event('input', {bubbles: true}));
       initial.editor.dispatchEvent(new Event('change', {bubbles: true}));
       status.textContent = 'Đã điền câu trả lời. Đang chờ nút nộp…';
@@ -121,6 +139,7 @@
       if (!target) throw new Error('Nút nộp chưa sẵn sàng. Câu trả lời đã điền; bạn có thể nộp thủ công.');
       check();
       sent.add(initial.key); // Claim before clicking: never retry an ambiguous submission.
+      submitted = true;
       target.click();
       status.textContent = 'Đã bấm nộp câu trả lời. Đang chờ trang xác nhận…';
       let confirmed = false;
@@ -131,6 +150,14 @@
       status.dataset.state = confirmed ? 'done' : 'notice';
       status.textContent = confirmed ? 'Đã gửi câu trả lời.' : 'Đã bấm nộp nhưng chưa xác nhận. Kiểm tra chat trước khi gửi lại.';
     } catch (error) {
+      // A late question/OCR update can invalidate an acknowledgement after it
+      // was filled. Remove only our untouched, unsent text so it cannot block
+      // the next automatic answer as a draft. Never erase a user's edit.
+      if (filledAcknowledgement && !submitted && !active.edited && initial.editor.isConnected && initial.editor.value === 'ok') {
+        Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(initial.editor, '');
+        initial.editor.dispatchEvent(new Event('input', {bubbles: true}));
+        initial.editor.dispatchEvent(new Event('change', {bubbles: true}));
+      }
       status.dataset.state = active.cancelled ? 'notice' : 'error';
       status.textContent = active.cancelled ? 'Đã dừng. Không gửi câu trả lời.' : error.message;
     } finally {
@@ -207,7 +234,7 @@
       if (event.isTrusted) setAutomatic(!autoEnabled);
     });
     const actionNote = document.createElement('p'); actionNote.className = 'ai-action-note'; actionNote.id = 'ai-action-note';
-    actionNote.textContent = 'Tự động trả lời và nộp câu hỏi mới khi ô nhập trống. Có thể tắt tự động hoặc bấm trả lời để thử lại.';
+    actionNote.textContent = 'Tự động trả lời câu hỏi và gửi “ok” khi chatbot nhắn nội dung không phải câu hỏi, nếu ô nhập trống. Có thể tắt tự động.';
     start.setAttribute('aria-describedby', actionNote.id);
     const frame = document.createElement('iframe'); frame.id = 'api-frame'; frame.title = 'Cài đặt API'; frame.hidden = true;
     settings.setAttribute('aria-controls', 'api-frame'); settings.setAttribute('aria-expanded', 'false');
@@ -274,8 +301,7 @@
       const composers = [...document.querySelectorAll('.w-chat-input')].filter(visible);
       updatePreview();
       if (composers.length !== 1) { status.dataset.state = 'error'; status.textContent = 'Hãy mở một khung chat để AI đọc đúng Câu hỏi.'; return; }
-      try { attempted.add(snapshot(composers[0]).key); } catch { /* answer displays the error */ }
-      void answer(composers[0], status, start, stop);
+      void answer(composers[0], status, start, stop, key => attempted.add(key));
     });
     stop.addEventListener('click', event => {
       if (!event.isTrusted || !task) return;
@@ -291,7 +317,7 @@
       let current;
       try { current = snapshot(composers[0]); } catch { candidate = null; return; }
       if (current.editor.value.trim() || sent.has(current.key) || attempted.has(current.key)) { candidate = null; return; }
-      if (!candidate || candidate.key !== current.key || candidate.box !== current.box || candidate.editor !== current.editor) {
+      if (!candidate || candidate.key !== current.key || candidate.question !== current.question || candidate.box !== current.box || candidate.editor !== current.editor) {
         candidate = {...current, since: Date.now()};
         return;
       }

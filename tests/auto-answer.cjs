@@ -72,7 +72,7 @@ async function main() {
     // Bind the fixture before the extension's document-idle content script can
     // observe a stable question and submit the initial automatic answer.
     await page.addInitScript(() => {
-      window.__rcFixture = {submits: 0, hints: 0};
+      window.__rcFixture = {submits: 0, submittedValues: [], hints: 0};
       const install = () => {
         const editor = document.querySelector('.w-chat-input textarea');
         const submit = document.querySelector('button[data-intent="SUBMIT_ANSWER"]');
@@ -85,6 +85,7 @@ async function main() {
         submit.addEventListener('click', () => {
           if (submit.disabled) return;
           window.__rcFixture.submits += 1;
+          window.__rcFixture.submittedValues.push(editor.value);
           // This models the chat app accepting the answer and clearing its
           // controlled input after one explicit submit.
           const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set;
@@ -140,6 +141,31 @@ async function main() {
       const box = document.querySelector('.exercise-question-block');
       box.innerHTML = `<div>Câu hỏi:</div><p>${question}</p>`;
     }, text);
+    const appendBotMessage = ({text = '', media = false} = {}) => page.evaluate(({text, media}) => {
+      const message = document.createElement('div');
+      message.className = 'message-container message-assistant';
+      if (media) {
+        const image = document.createElement('img');
+        image.alt = 'chat media';
+        image.width = 32;
+        image.height = 32;
+        message.append(image);
+      } else {
+        const paragraph = document.createElement('p');
+        paragraph.textContent = text;
+        message.append(paragraph);
+      }
+      document.querySelector('.chat-messages').append(message);
+    }, {text, media});
+    const appendUserMessage = text => page.evaluate(messageText => {
+      const message = document.createElement('div');
+      message.className = 'message-container message-user';
+      const paragraph = document.createElement('p');
+      paragraph.textContent = messageText;
+      message.append(paragraph);
+      document.querySelector('.chat-messages').append(message);
+    }, text);
+    const submittedValues = () => page.evaluate(() => __rcFixture.submittedValues.slice());
 
     // Automatic mode owns the initial request. No answer-button click is used.
     await waitFor(async () => (await calls()).length === 1, 'automatic initial backend request');
@@ -299,6 +325,148 @@ async function main() {
     await waitFor(async () => !(await answer.isDisabled()), 'changed hint cleanup');
     assert.equal(await page.evaluate(() => __rcFixture.submits), 5, 'changed hints invalidate pending answers');
     assert.equal(await editor.inputValue(), '');
+
+    // Automatic mode can acknowledge a latest bot message that has no
+    // exercise-question block. The literal acknowledgement uses the existing
+    // submit flow and must not call the LLM provider.
+    await setMode('answer');
+    assert.equal(await auto.getAttribute('aria-pressed'), 'false');
+    const beforeOkCalls = (await calls()).length;
+    const beforeOkSubmits = await page.evaluate(() => __rcFixture.submits);
+    await appendBotMessage({text: 'Thanks for the explanation.'});
+    await auto.click();
+    assert.equal(await auto.getAttribute('aria-pressed'), 'true');
+    await waitFor(async () => (await page.evaluate(() => __rcFixture.submits)) === beforeOkSubmits + 1, 'automatic OK submit');
+    assert.equal((await calls()).length, beforeOkCalls, 'automatic OK must not call the LLM');
+    assert.equal((await submittedValues()).at(-1), 'ok');
+    await pause(1600);
+    assert.equal(await page.evaluate(() => __rcFixture.submits), beforeOkSubmits + 1, 'one bot message must receive one OK');
+
+    // A separate message element with identical text is still a new message
+    // and must receive its own acknowledgement.
+    await appendBotMessage({text: 'Thanks for the explanation.'});
+    await waitFor(async () => (await page.evaluate(() => __rcFixture.submits)) === beforeOkSubmits + 2, 'same-text new-message OK submit');
+    assert.equal((await calls()).length, beforeOkCalls, 'same-text OK must not call the LLM');
+    assert.equal((await submittedValues()).at(-1), 'ok');
+    await pause(1600);
+    assert.equal(await page.evaluate(() => __rcFixture.submits), beforeOkSubmits + 2, 'same-text message must not repeat OK');
+
+    // A newer user message supersedes a bot statement before it becomes a
+    // stable automatic-answer candidate.
+    await appendBotMessage({text: 'This bot statement is immediately followed by the user.'});
+    await appendUserMessage('User replied before the acknowledgement timer.');
+    await pause(1800);
+    assert.equal(await page.evaluate(() => __rcFixture.submits), beforeOkSubmits + 2, 'a newer user message must block automatic OK');
+    assert.equal((await calls()).length, beforeOkCalls, 'a newer user message must not call the LLM');
+
+    // Never overwrite a draft while automatic mode is enabled.
+    await editor.fill('keep this draft while acknowledging');
+    await appendBotMessage({text: 'This message must respect the draft.'});
+    await pause(1800);
+    assert.equal(await page.evaluate(() => __rcFixture.submits), beforeOkSubmits + 2, 'automatic OK must respect an existing draft');
+    assert.equal((await calls()).length, beforeOkCalls, 'draft guard must not call the LLM');
+    assert.equal(await editor.inputValue(), 'keep this draft while acknowledging');
+    await editor.fill('');
+
+    // Plain text that looks like a question, and media-only messages, are not
+    // eligible for the literal acknowledgement.
+    const beforeSkippedSubmits = await page.evaluate(() => __rcFixture.submits);
+    await appendBotMessage({text: 'Could you explain this?'});
+    await pause(1800);
+    assert.equal(await page.evaluate(() => __rcFixture.submits), beforeSkippedSubmits, 'question-mark text must be skipped');
+    assert.equal((await calls()).length, beforeOkCalls, 'question-mark text must not call the LLM');
+    await appendBotMessage({media: true});
+    await pause(1800);
+    assert.equal(await page.evaluate(() => __rcFixture.submits), beforeSkippedSubmits, 'media-only messages must be skipped');
+    assert.equal((await calls()).length, beforeOkCalls, 'media-only messages must not call the LLM');
+
+    // Turning automation off prevents acknowledgement of later plain messages.
+    await auto.click();
+    assert.equal(await auto.getAttribute('aria-pressed'), 'false');
+    await appendBotMessage({text: 'Automation is disabled for this message.'});
+    await pause(1800);
+    assert.equal(await page.evaluate(() => __rcFixture.submits), beforeSkippedSubmits, 'disabled automation must skip automatic OK');
+    assert.equal((await calls()).length, beforeOkCalls, 'disabled automation must not call the LLM');
+    assert.equal(await editor.inputValue(), '');
+
+    // If the bot replaces a plain-text message with a question while the
+    // automatic acknowledgement is being injected, never submit the stale
+    // literal "ok" or leave it in the composer. The replacement question must
+    // still be picked up by the next polling cycle.
+    const beforeRaceCalls = (await calls()).length;
+    const beforeRaceSubmits = await page.evaluate(() => __rcFixture.submits);
+    await page.evaluate(() => {
+      const message = document.createElement('div');
+      message.className = 'message-container message-assistant';
+      message.innerHTML = '<p>Preparing the next exercise.</p>';
+      const editor = document.querySelector('.w-chat-input textarea');
+      editor.addEventListener('input', () => {
+        if (editor.value !== 'ok' || message.dataset.raced) return;
+        message.dataset.raced = 'true';
+        message.innerHTML = '<div class="exercise-question-block"><div>Câu hỏi:</div><p>Question created during acknowledgement</p></div>';
+      });
+      document.querySelector('.chat-messages').append(message);
+    });
+    await auto.click();
+    assert.equal(await auto.getAttribute('aria-pressed'), 'true');
+    await waitFor(async () => (await page.evaluate(() => __rcFixture.submits)) === beforeRaceSubmits + 1, 'replacement question submit', 7000);
+    assert.equal((await calls()).length, beforeRaceCalls + 1, 'question created during acknowledgement must be answered');
+    assert.equal(await page.evaluate(() => __rcFixture.submits), beforeRaceSubmits + 1, 'replacement question must submit exactly once');
+    assert.equal((await submittedValues()).at(-1), 'mocked answer', 'stale OK must never be submitted');
+    assert.equal(await editor.inputValue(), '', 'composer must be clear after the replacement answer');
+
+    // Replacement text during the acknowledgement window must survive the
+    // automatic task and must not be submitted or overwritten.
+    const beforeDraftRaceSubmits = await page.evaluate(() => __rcFixture.submits);
+    await auto.click();
+    assert.equal(await auto.getAttribute('aria-pressed'), 'false');
+    await page.evaluate(() => {
+      const message = document.createElement('div');
+      message.className = 'message-container message-assistant';
+      message.innerHTML = '<p>Another plain bot statement.</p>';
+      const editor = document.querySelector('.w-chat-input textarea');
+      editor.addEventListener('input', () => {
+        if (editor.value !== 'ok' || message.dataset.edited) return;
+        message.dataset.edited = 'true';
+        const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set;
+        setter.call(editor, 'user replacement');
+        editor.dispatchEvent(new Event('input', {bubbles: true}));
+      });
+      document.querySelector('.chat-messages').append(message);
+    });
+    await auto.click();
+    await pause(2200);
+    assert.equal(await page.evaluate(() => __rcFixture.submits), beforeDraftRaceSubmits, 'user replacement must not be submitted');
+    assert.equal(await editor.inputValue(), 'user replacement', 'user replacement must be preserved');
+    await auto.click();
+    assert.equal(await auto.getAttribute('aria-pressed'), 'false');
+    await editor.fill('');
+
+    // A manual click with a draft must not claim the question as attempted.
+    // After the draft is cleared, automatic mode should still answer it.
+    const beforeManualCalls = (await calls()).length;
+    const beforeManualSubmits = await page.evaluate(() => __rcFixture.submits);
+    await page.evaluate(() => {
+      const message = document.createElement('div');
+      message.className = 'message-container message-assistant';
+      message.innerHTML = '<div class="exercise-question-block"><div>Câu hỏi:</div><p>Question after blocked manual click</p></div>';
+      document.querySelector('.chat-messages').append(message);
+    });
+    await editor.fill('manual draft');
+    await auto.click();
+    assert.equal(await auto.getAttribute('aria-pressed'), 'true');
+    await answer.click();
+    await pause(200);
+    assert.equal((await calls()).length, beforeManualCalls, 'manual draft must block the provider');
+    assert.equal(await editor.inputValue(), 'manual draft', 'manual draft must remain untouched');
+    await editor.fill('');
+    await waitFor(async () => (await calls()).length === beforeManualCalls + 1, 'question after blocked manual click backend request');
+    await waitFor(async () => (await page.evaluate(() => __rcFixture.submits)) === beforeManualSubmits + 1, 'question after blocked manual click submit');
+    assert.equal((await submittedValues()).at(-1), 'mocked answer');
+    assert.equal(await editor.inputValue(), '');
+    await auto.click();
+    assert.equal(await auto.getAttribute('aria-pressed'), 'false');
+
     console.log('PASS: automatic answers, multiple retry hints, hint deduplication, stale hints, drafts, cancellation and provider failures.');
   } finally {
     await context.close();

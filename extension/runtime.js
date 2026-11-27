@@ -28,12 +28,17 @@
     }
   });
   const earlyUrls=[];
+  const canvasImages = new WeakMap();
+  const recordCanvasImage = (canvas, source) => {
+    if (source?.tagName === 'IMG') canvasImages.set(canvas, source.currentSrc || source.src);
+  };
   const originalDrawImage=CanvasRenderingContext2D.prototype.drawImage;
   CanvasRenderingContext2D.prototype.drawImage=function(s,...args){
+    recordCanvasImage(this.canvas, s);
     if(s?.tagName==='IMG') {earlyUrls.push(s.currentSrc||s.src); if(earlyUrls.length>1000)earlyUrls.shift();}
     return originalDrawImage.call(this,s,...args);
   };
-  window.RC={ready,earlyUrls,originalDrawImage,flush:()=>writeTail,postJob:job=>write('post-job',{job})};
+  window.RC={ready,earlyUrls,originalDrawImage,canvasImages,recordCanvasImage,flush:()=>writeTail,postJob:job=>write('post-job',{job})};
   RC.palette=pixels=>call('palette',{pixels}).then(r=>{RC.paletteBackend=r.backend;return r.colors;});
   RC.ocr=options=>call('ocr',options);
   RC.ocrStop=()=>call('ocr-stop');

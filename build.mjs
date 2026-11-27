@@ -43,8 +43,9 @@ await writeText('extension/auto-answer.js', replaceOnce(await readText('source/a
 const {version} = JSON.parse(await readText('extension/manifest.json'));
 const {engineSource, features} = splitUserscript(await readText(USERSCRIPT));
 const fidelitySource = await readText('source/ocr-fidelity.js');
+const tableSource = await readText('source/ocr-tables.js');
 
-const engine = buildOcrEngine(engineSource, version, fidelitySource);
+const engine = buildOcrEngine(engineSource, version, fidelitySource, tableSource);
 await writeText('extension/ocr-engine.js', engine);
 await writeText('extension/ocr-core.js', buildOcrCore(engine));
 

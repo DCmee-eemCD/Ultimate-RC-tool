@@ -14,6 +14,10 @@ import {ocrToolbar} from './ocr-toolbar.mjs';
 import {sourceFirst} from './source-first.mjs';
 import {consoleUI} from './console-ui.mjs';
 
+async function imageCopy(p, ctx) {
+  p.after("    const save = () => GM_setValue('chatKit', cfg);", '\n' + await ctx.readText('source/image-copy.js'));
+}
+
 export const PAGE_TRANSFORMS = [
   navIcons,
   dashboardTheme,
@@ -26,6 +30,7 @@ export const PAGE_TRANSFORMS = [
   ocrToolbar,
   sourceFirst,
   consoleUI,
+  imageCopy,
 ];
 
 export async function applyPageTransforms(app, ctx) {

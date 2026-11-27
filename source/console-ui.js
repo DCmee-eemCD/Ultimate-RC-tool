@@ -92,23 +92,25 @@
             }
         }
         const updateGroup = document.createElement('div');
-        updateGroup.className = 'console-group';
-        const updateHeading = document.createElement('h4');
-        updateHeading.textContent = 'Cập nhật';
+        updateGroup.className = 'console-updates';
         const updateButton = document.createElement('button');
         updateButton.type = 'button'; updateButton.id = 'rc-open-updates';
         updateButton.className = 'sm ui-btn ui-btn-sm';
-        updateButton.textContent = 'Kiểm tra cập nhật';
+        updateButton.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5"/><path d="M6.1 7a7 7 0 0 1 11.6-1L20 9M4 15l2.3 3A7 7 0 0 0 17.9 17"/></svg><span>Cập nhật</span>';
+        updateButton.setAttribute('aria-label', 'Kiểm tra cập nhật');
+        updateButton.title = 'Kiểm tra cập nhật';
         const updateStatus = document.createElement('p');
         updateStatus.setAttribute('role', 'status');
         updateButton.addEventListener('click', async () => {
             updateButton.disabled = true; updateStatus.textContent = '';
+            updateButton.setAttribute('aria-busy', 'true');
             try { await RC.openUpdates(); }
             catch { updateStatus.textContent = 'Không mở được cập nhật. Hãy tải lại tiện ích và làm mới EduNext.'; }
-            finally { updateButton.disabled = false; }
+            finally { updateButton.disabled = false; updateButton.removeAttribute('aria-busy'); }
         });
-        updateGroup.append(updateHeading, updateButton, updateStatus);
-        $('.sec[data-sec="feat"]').append(updateGroup);
+        $('.hd .x').before(updateButton);
+        updateGroup.append(updateStatus);
+        tablist.before(updateGroup);
         /* CONSOLE_SIZE_CONTROLS */
         const resetOcrButton = document.createElement('button');
         resetOcrButton.type = 'button'; resetOcrButton.id = 'rc-ocr-reset';
